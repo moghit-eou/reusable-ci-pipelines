@@ -19,8 +19,8 @@ OSV_SCANNER_VERSION="${OSV_SCANNER_VERSION:-v2.5.1}"
 OSV_SCANNER_SHA256="${OSV_SCANNER_SHA256:-f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be}"
 
 # renovate: datasource=github-release-attachments depName=opengrep/opengrep
-OPENGREP_VERSION="${OPENGREP_VERSION:-v1.25.0}"
-OPENGREP_SHA256="${OPENGREP_SHA256:-9ac4aebb47ba3f7b0d8fc641ac8749cb6c2f253f616131a67d9631e00d4bea33}"
+OPENGREP_VERSION="${OPENGREP_VERSION:-v1.29.0}"
+OPENGREP_SHA256="${OPENGREP_SHA256:-3365ef49d04893e01338d85d9bbd49b2bd5261ad4c9c0df0a6a0f8d44232ae13}"
 
 # renovate: datasource=git-refs depName=https://github.com/semgrep/semgrep-rules
 SEMGREP_RULES_REF="${SEMGREP_RULES_REF:-40b8c63f75dc7c22c8a77482d73bfb864b146f7e}"
