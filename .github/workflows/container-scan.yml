@@ -82,7 +82,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: ${{ !cancelled() && hashFiles(format('{0}/{1}', env.PROJECT, env.MERGED_SARIF_OUTPUT)) != '' }}
-        uses: github/codeql-action/upload-sarif@4e94bd11f71e507f7f87df81788dff88d1dacbfb # v4.31.2
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.31.2
         with:
           sarif_file: ${{ env.PROJECT }}/${{ env.MERGED_SARIF_OUTPUT }}
           category: ${{ env.SARIF_CATEGORY }}
