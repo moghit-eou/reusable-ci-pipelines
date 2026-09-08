@@ -4,6 +4,6 @@
   "private": true,
   "description": "Pins @cyclonedx/cyclonedx-npm and its full dependency tree via package-lock.json (sha512 integrity). Installed by ci/setup-tools.sh with npm ci --ignore-scripts.",
   "devDependencies": {
-    "@cyclonedx/cyclonedx-npm": "6.0.0"
+    "@cyclonedx/cyclonedx-npm": "6.0.1"
   }
 }
