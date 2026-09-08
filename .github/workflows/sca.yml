@@ -115,6 +115,7 @@ jobs:
 
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
+          # renovate: datasource=python-version depName=python
           python-version: '3.14.4'
 
       # No dependency cache: `generic` is a Trivy filesystem scan, nothing is resolved.
@@ -179,6 +180,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
+          # renovate: datasource=python-version depName=python
           python-version: '3.14.4'
 
       - name: Cache npm packages

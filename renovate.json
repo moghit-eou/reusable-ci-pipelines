@@ -1,15 +1,54 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "Renovate owns: tool pins in ci/setup-tools.sh (regex), the npm lockfile for the SBOM tool in ci/sbom-npm (npm), pre-commit hook revs, the python-version in workflows (regex) and the digest-pinned base image in ci/docker/Dockerfile (dockerfile).",
+    "GitHub Actions SHA pins are owned by Dependabot (.github/dependabot.yml), so the github-actions manager stays disabled here.",
+    "test-*/ fixtures are pinned by hand and deliberately never auto-updated (ignorePaths).",
+    "Every update waits 7 days after release (minimumReleaseAge). git-refs has no release timestamps, so the semgrep-rules ref is not held back."
+  ],
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "custom.regex",
+    "pre-commit",
+    "npm",
+    "dockerfile"
+  ],
+  "ignorePaths": [
+    "test-*/**"
+  ],
+  "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 5am on monday"
+    ]
+  },
+  "labels": [
+    "dependencies"
+  ],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Bump tool versions and their pinned release-asset SHA256 in CI setup scripts",
+      "description": "Bump tool versions in ci/setup-tools.sh, together with the pinned release-asset SHA256 when one follows the version line",
       "managerFilePatterns": [
         "/(^|/)setup-tools\\.sh$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_VERSION=\"\\$\\{[A-Z_]+_VERSION:-(?<currentValue>v[0-9][0-9.]*)\\}\"\\n[A-Z_]+_SHA256=\"\\$\\{[A-Z_]+_SHA256:-(?<currentDigest>[a-f0-9]{64})\\}\"",
-        "# renovate: datasource=(?<datasource>npm) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_VERSION=\"\\$\\{[A-Z_]+_VERSION:-(?<currentValue>[0-9][0-9.]*)\\}\""
+        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_VERSION=\"\\$\\{[A-Z_]+_VERSION:-(?<currentValue>v?[0-9][0-9.]*)\\}\"(?:\\n[A-Z_]+_SHA256=\"\\$\\{[A-Z_]+_SHA256:-(?<currentDigest>[a-f0-9]{64})\\}\")?"
+      ]
+    },
+    {
+      "customType": "regex",
+      "description": "Track a git branch head pinned as a commit SHA in ci/setup-tools.sh",
+      "currentValueTemplate": "develop",
+      "managerFilePatterns": [
+        "/(^|/)setup-tools\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_REF=\"\\$\\{[A-Z_]+_REF:-(?<currentDigest>[a-f0-9]{40})\\}\""
       ]
     },
     {
@@ -21,49 +60,32 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\n\\s*python-version:\\s*'(?<currentValue>[0-9][0-9.]*)'"
       ]
-    },
-    {
-      "customType": "regex",
-      "description": "Bump DOCKERIZE_VERSION pinned in Dockerfile",
-      "managerFilePatterns": [
-        "/(^|/)Dockerfile[^/]*$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>[a-z-]+) depName=(?<depName>[^\\s]+)\\s*\\nENV DOCKERIZE_VERSION=(?<currentValue>v[0-9][0-9.]*)"
-      ]
-    },
-    {
-      "currentValueTemplate": "develop",
-      "customType": "regex",
-      "description": "Track a git branch head pinned as a commit SHA in CI setup scripts",
-      "managerFilePatterns": [
-        "/(^|/)setup-tools\\.sh$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>[^\\s]+)\\n[A-Z_]+_REF=\"\\$\\{[A-Z_]+_REF:-(?<currentDigest>[a-f0-9]{40})\\}\""
-      ]
     }
-  ],
-  "enabledManagers": [
-    "custom.regex",
-    "pre-commit"
-  ],
-  "extends": [
-    "config:recommended"
-  ],
-  "labels": [
-    "dependencies"
   ],
   "packageRules": [
     {
       "description": "Never update a checksum for an existing version: a re-uploaded release asset must fail CI, not be auto-repinned",
-      "enabled": false,
       "matchDatasources": [
         "github-release-attachments"
       ],
       "matchUpdateTypes": [
         "digest"
-      ]
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Base images stay digest-pinned; Renovate proposes digest bumps rather than tag-only updates",
+      "matchDatasources": [
+        "docker"
+      ],
+      "pinDigests": true
+    },
+    {
+      "description": "The SBOM tool lockfile: exact versions only, refresh the lockfile so transitive deps stay pinned",
+      "matchManagers": [
+        "npm"
+      ],
+      "rangeStrategy": "pin"
     }
   ]
 }
