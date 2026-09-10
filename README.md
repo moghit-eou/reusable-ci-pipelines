@@ -523,6 +523,11 @@ Set these in a workflow `env:` block for CI, or in `ci/docker/env/*.env` for loc
 
 ---
 
-## License
+ ## License
 
-Free to use. No restrictions.
+-Free to use. No restrictions.
++Licensed under the [MIT License](LICENSE).
++
++You may use, modify and redistribute this project, including commercially.
++The only condition is that the copyright and license notice stays with copies
++or substantial portions of the code.
