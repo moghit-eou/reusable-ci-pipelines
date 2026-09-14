@@ -51,28 +51,21 @@ new enough that database coverage differed showed up in one before the other. Ea
 tool syncs its own upstream database on its own schedule. Running both closes gaps
 neither closes alone.
 
-### Rejected: OWASP Dependency-Check
+### Rejected
 
-Dependency-Check was the obvious candidate for SCA, and it was tested first. It was
-rejected on operational grounds rather than on coverage.
+Several tools were tested and not adopted. The common reasons: they required a hosted
+account or a commercial licence (**Snyk**), they gated useful features behind a paid
+tier (**Semgrep**, see above), or they emitted no SARIF, so their findings could not
+join the shared gate.
 
-It builds its vulnerability data from the NIST NVD API, and that API does not hold up
-under CI usage. Runs hit rate limits and HTTP 503s from the NVD infrastructure, and the
-update step retries rather than failing fast, so a scan that should take a minute
-either stalls or dies partway through. The problem is not specific to one project: NVD
-schema changes in June 2026 required re-pulling roughly 350,000 records through the
-same API, and an API key raises the rate limit without fixing the underlying overload.
-The documented mitigation is to stop using the API and point the tool at a cached data
-feed instead, which means either trusting a third party mirror or hosting one.
-
-Trivy and OSV-Scanner both ship their own databases and sync them independently, so
-neither has this failure mode. That is why both are here and Dependency-Check is not.
-
-It is worth saying plainly that Dependency-Check is itself an OWASP project, and the
-rejection is about how its data source behaves in CI, not about the tool's analysis.
-
-Other tools were dropped for more ordinary reasons: they needed a hosted account to be
-useful, or they emitted no SARIF, so their findings could not join the shared gate.
+**OWASP Dependency-Check** is worth calling out, because it was the obvious candidate
+for SCA and it was rejected on operational grounds rather than on coverage. It builds
+its data from the NIST NVD API, and that API does not hold up under CI usage: runs hit
+rate limits and 503s, and the update step retries rather than failing fast, so a scan
+either stalls or dies partway through. An API key raises the rate limit without fixing
+the underlying overload, and the documented mitigation is to abandon the API for a
+cached data feed. Trivy and OSV-Scanner ship and sync their own databases, so neither
+has this failure mode.
 
 ---
 

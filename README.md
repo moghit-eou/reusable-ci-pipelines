@@ -210,6 +210,8 @@ a prerequisite.
   [Semgrep Registry](https://semgrep.dev/explore)
 - **Standards**: [SARIF](https://sarifweb.azurewebsites.net/), [CycloneDX](https://cyclonedx.org/)
 - **Guideline**: [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/)
+- **EBRAINS DevSecOps Handbook**:
+  [moghit-eou/EBRAIN-DevSecOps-handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook)
 
 ---
 
