@@ -1,3 +1,5 @@
+# Troubleshooting
+
 ## When the target has nothing to scan
 
 A run can end like this even though the toolbox is working:

@@ -1,0 +1,1389 @@
+diff --git a/Makefile b/Makefile
+index 4e29439..871e13f 100644
+--- a/Makefile
++++ b/Makefile
+@@ -15,7 +15,7 @@ define USAGE
+ Usage:
+   make sast   PROJECT=<dir>
+   make sca    PROJECT=<dir> ECOSYSTEM=<maven|npm|golang|generic|none|...>
+-            more ecosystems: https://github.com/moghit-eou/DevSecOps-CI-pipelines#sca-ecosystem-configuration
++            more ecosystems: https://github.com/moghit-eou/reusable-ci-pipelines/blob/main/docs/new-ecosystem.md
+   make container-scan IMAGE=<image> SCAN_TYPE=<sast|sca> [PROJECT=<dir>]  # PROJECT required when SCAN_TYPE=sast
+ endef
+ export USAGE
+diff --git a/README.md b/README.md
+index 364d926..861e065 100644
+--- a/README.md
++++ b/README.md
+@@ -1,280 +1,87 @@
+ # DevSecOps Security Pipelines
+ 
+-Three reusable security pipelines (**SAST**, **SCA**, and **Container Scanning**) that run identically on your laptop and in GitHub Actions.
+-
+-Each pipeline runs open source scanners, normalises their output to [SARIF](https://sarifweb.azurewebsites.net/), and applies a shared gate. Locally they run in purpose-built Docker images through a `make` command. In CI they run natively on the runner through the same `ci/` scripts.Nothing differs between the two environments except where the scripts run, so a finding you reproduce locally is exactly what CI reports.
+-
+-Developed as part of **Google Summer of Code 2026** with [EBRAINS](https://www.ebrains.eu/), following the [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/), and deployed in the [Medical Informatics Platform](https://github.com/Medical-Informatics-Platform).
+-
+----
+-
+-## Table of Contents
+-
+-- [Repository Structure](#repository-structure)
+-- [The Three Pipelines](#the-three-pipelines)
+-- [Quick Start](#quick-start)
+-- [Running Locally: the Makefile](#running-locally-the-makefile)
+-- [Running in CI: GitHub Actions](#running-in-ci-github-actions)
+-- [Adopting in Your Own Repository](#adopting-in-your-own-repository)
+-- [The Gate](#the-gate)
+-- [Reading SARIF Reports](#reading-sarif-reports)
+-- [Configuring Semgrep Rulesets](#configuring-semgrep-rulesets)
+-- [Adding Your Own Ecosystem](#adding-your-own-ecosystem)
+-- [Suppressing a False Positive](#suppressing-a-false-positive)
+-- [Environment Variables](#environment-variables)
+-- [Related Resources](#related-resources)
++Three security pipelines, **SAST**, **SCA** and **Container Scanning**, that run the
++same way on your laptop and in GitHub Actions.
++
++Each pipeline runs open source scanners, normalises their output to
++[SARIF](https://sarifweb.azurewebsites.net/), and applies one shared gate. Locally
++they run in purpose-built Docker images through `make`. In CI they run natively on
++the runner through the same `ci/` scripts. Nothing differs between the two except
++where the scripts execute, so a finding you reproduce locally is the finding CI
++reports.
++
++Built during **Google Summer of Code 2026** with [EBRAINS](https://www.ebrains.eu/),
++following the
++[OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/), and
++running in production across the
++[Medical Informatics Platform](https://github.com/Medical-Informatics-Platform).
+ 
+ ---
+ 
+-## Repository Structure
+-
+-```
+-.
+-├── Makefile                        # local entrypoint: make sast | sca | container-scan
+-├── toolbox.sh                      # builds and runs the Docker toolbox images
+-│
+-├── ci/                             # everything the pipelines need, vendor this folder
+-│   ├── setup-tools.sh              # installs scanners (SHA256 pinned) and generates SBOMs
+-│   ├── sast_scan.py                # SAST orchestrator      (OpenGrep)
+-│   ├── sca_scan.py                 # SCA orchestrator       (Trivy + OSV-Scanner)
+-│   ├── container_scan.py           # Container orchestrator (Hadolint, OpenGrep, Trivy, OSV)
+-│   ├── parse_sarif.py              # shared CVSS gate logic
+-│   │
+-│   ├── suppress_trivy.yaml         # your Trivy suppressions
+-│   ├── suppress_osv_scanner.toml   # your OSV-Scanner suppressions
+-│   │
+-│   └── docker/
+-│       ├── Dockerfile              # 3 toolbox images from one shared installer stage
+-│       ├── entrypoints/            # sca-entrypoint.sh
+-│       └── env/                    # sast.env | sca.env | container-scan.env
+-│
+-├── .github/workflows/              # reference CI, also this repo's own test suite
+-│   ├── sast.yml
+-│   ├── sca.yml
+-│   └── container-scan.yml
+-│
+-└── test-*/                         # sample targets used to exercise the pipelines
+-```
+-
+-To adopt these pipelines in your own project, copy **`ci/`** plus the workflow file you need. Nothing else is required.
+-
+----
++## The pipelines
+ 
+-## The Three Pipelines
+-
+-| Pipeline | Scanners | What it inspects | Gate |
++| Pipeline | Scanners | What it inspects | Fails on |
+ |---|---|---|---|
+ | **SAST** | OpenGrep with [semgrep-rules](https://github.com/semgrep/semgrep-rules) | Your source code | Any `ERROR` severity rule match |
+-| **SCA** | Trivy, OSV-Scanner | A CycloneDX SBOM of your dependencies | CVSS threshold |
+-| **Container Scanning** | Hadolint, OpenGrep, Trivy, OSV-Scanner | Dockerfile **and** the built image | CVSS threshold + `ERROR` severity rule (combine both SAST and SCA) |
+-
+-The pipelines are deliberately independent. No shared state, no ordering constraints. Run one, run all three, run them in parallel.
++| **SCA** | Trivy, OSV-Scanner | A CycloneDX SBOM of your dependencies | CVSS at or above the threshold |
++| **Container Scanning** | Hadolint, OpenGrep, Trivy, OSV-Scanner | The Dockerfile **and** the built image | Either of the above |
+ 
+-**SAST** is static analysis of your own code. OpenGrep (an open source fork of Semgrep) matches pattern based rules against the source tree.
++They are deliberately independent. No shared state, no ordering constraints. Run one,
++run all three, run them in parallel.
+ 
+-**SCA** is Software Composition Analysis, meaning your third party dependencies. It generates a CycloneDX SBOM first, then scans that SBOM. This decouples the scanners from the package manager, so adding a language means teaching the SBOM step how to produce a bill of materials, not modifying the scanners.
++**SAST** matches pattern based rules against your own code. **SCA** generates a
++CycloneDX SBOM first and scans that, which decouples the scanners from the package
++manager: adding a language means teaching the SBOM step to produce a bill of
++materials, not modifying the scanners. **Container Scanning** does both against one
++image, linting the Dockerfile and scanning the built layers, then merges all four
++SARIF reports before applying the gate.
+ 
+-**Container Scanning** combines both approaches against one image. It runs a SAST pass over the Dockerfile (Hadolint plus OpenGrep Dockerfile rules) and an SCA pass over the built image layers (Trivy plus OSV-Scanner), then merges all four SARIF reports into one before applying the gate. So a container scan can fail on a bad `RUN` instruction, on a vulnerable base image package, or on both.
++Why these particular tools, and what was rejected: [docs/why-these-tools.md](docs/why-these-tools.md).
+ 
+ ---
+ 
+-## Quick Start
+-
+-**Requirements:** Docker, `make`, and Bash. Nothing else, since the scanners are installed inside the images.
++## Quick start
+ 
+-Container Scanning also needs the image built beforehand, and `toolbox.sh` mounts the Docker socket (`-v /var/run/docker.sock:/var/run/docker.sock`) so the toolbox can inspect it.
++**Requirements:** Docker, `make` and Bash. The scanners install themselves inside the
++images, so there is nothing else to set up.
+ 
+ ```bash
+-git clone https://github.com/moghit-eou/DevSecOps-CI-pipelines.git
+-cd DevSecOps-CI-pipelines
++git clone https://github.com/moghit-eou/reusable-ci-pipelines.git
++cd reusable-ci-pipelines
+ 
+ make sast PROJECT=./test-golang
+ make sca  PROJECT=./test-maven ECOSYSTEM=maven
+ ```
+ 
+-The first run builds the toolbox image, which takes a few minutes because it downloads the scanners and the Trivy vulnerability database. Later runs reuse the cached layers and take seconds.
+-
+-SARIF reports are written **inside `PROJECT`**.
+-
+----
+-
+-## Running Locally: the Makefile
++Container Scanning needs the image built first:
+ 
+ ```bash
+-# SAST, scan source code
+-make sast PROJECT=<dir>
+-
+-# SCA, resolve dependencies, build an SBOM, scan it
+-make sca PROJECT=<dir> ECOSYSTEM=<maven|npm|golang|generic|none>
+-
+-# Container Scanning, the image must be built first
+-docker build -t myapp:local ./my-service
+-make container-scan IMAGE=myapp:local SCAN_TYPE=sast PROJECT=./my-service   # scan the Dockerfile
+-make container-scan IMAGE=myapp:local SCAN_TYPE=sca                          # scan the image
+-
+-# Remove SARIF outputs and toolbox images
+-make clean
+-```
+-
+-### How the local flow works
+-
+-`make` calls `toolbox.sh`, which calls `docker run` with your project **bind mounted at `/workspace`**, which is the image's `WORKDIR`.
+-
+-```mermaid
+-flowchart LR
+-    M["make sca PROJECT=./svc"] --> T[toolbox.sh]
+-    T --> B["docker build --target sca-toolbox"]
+-    B --> R["docker run<br/>-v ./svc:/workspace<br/>--env-file ci/docker/env/sca.env"]
+-    R --> S["setup-tools.sh --sbom-ecosystem<br/>then sca_scan.py"]
+-    S --> O["SARIF written into ./svc/"]
+-```
+-
+-Runtime configuration lives in `ci/docker/env/*.env`. Edit those to change thresholds, output names, or suppression paths **without rebuilding the image**.
+-
+-The scanners and the Trivy database are installed **once**, in a shared `toolbox-installer` stage. All three toolbox images copy from it, so switching between `make sast` and `make sca` costs nothing.
+-
+----
+-
+-## Running in CI: GitHub Actions
+-
+-The workflows in `.github/workflows/` are plain steps calling the same `ci/` scripts. No composite actions, no hidden indirection. Copy one into your repository and change the `env:` block.
+-
+-Every workflow follows the same shape:
+-
+-```mermaid
+-flowchart LR
+-    A["1 · Install scanners<br/>ci/setup-tools.sh"] --> B["2 · Run the scan<br/>cd into PROJECT"] --> C["3 · Upload SARIF<br/>Security tab + artifact"]
+-```
+-
+-Every job needs:
+-
+-```yaml
+-permissions:
+-  contents: read
+-  security-events: write   # to upload SARIF to the Security tab
++docker build -t test-maven:scan ./test-maven
++make container-scan IMAGE=test-maven:scan SCAN_TYPE=sca
+ ```
+ 
+-### SAST
++The first run builds the toolbox image, which takes a few minutes because it
++downloads the scanners and the Trivy vulnerability database. Later runs reuse the
++cached layers and take seconds.
+ 
+-The rules are cloned **outside the checkout**, then referenced by absolute path:
++SARIF reports are written **inside `PROJECT`**. `make clean` removes them along with
++the toolbox images.
+ 
+-```yaml
+-      - name: Install scanner and rules
+-        run: |
+-          mkdir -p "$GITHUB_WORKSPACE/../tools" && cd "$GITHUB_WORKSPACE/../tools"
+-          bash "$GITHUB_WORKSPACE/ci/setup-tools.sh" --install-tool opengrep,semgrep-rules
+-
+-      - name: Run SAST scan
+-        working-directory: ${{ env.PROJECT }}
+-        run: python3 "$GITHUB_WORKSPACE/ci/sast_scan.py"
+-```
+-
+-**Why outside the checkout:** the semgrep-rules repository ships thousands of deliberately vulnerable test fixtures. If it lands inside the folder being scanned, OpenGrep will scan those fixtures and flood you with findings. `$GITHUB_WORKSPACE/../tools` is outside the checkout and always safe. The local Docker flow achieves the same separation by baking rules into `/app/semgrep-rules`, outside the `/workspace` mount.
+-
+-### SCA
+-
+-Two mandatory settings, what to scan and which ecosystem it is:
+-
+-```yaml
+-    env:
+-      PROJECT: .
+-      ECOSYSTEM: maven          # maven | npm | golang | generic | none
+-```
+-
+-```yaml
+-      # cd into PROJECT, because setup-tools.sh writes the SBOM to the current directory
+-      - name: Install scanners and generate SBOM
+-        working-directory: ${{ env.PROJECT }}
+-        run: |
+-          bash "$GITHUB_WORKSPACE/ci/setup-tools.sh" \
+-            --install-tool trivy,osv-scanner \
+-            --sbom-ecosystem "$ECOSYSTEM"
+-
+-      - name: Run SCA scan
+-        working-directory: ${{ env.PROJECT }}
+-        run: python3 "$GITHUB_WORKSPACE/ci/sca_scan.py"
+-```
+-
+-Add your build toolchain before those steps if the runner lacks it (`actions/setup-node` for npm, `actions/setup-go` for Go). Maven is preinstalled on `ubuntu-latest`, and `generic` needs nothing.
+-
+-Dependency caching by ecosystem:
+-
+-| Ecosystem | Cache path | Key file |
+-|---|---|---|
+-| `maven` | `~/.m2/repository` | `pom.xml` |
+-| `npm` | `~/.npm` | `package-lock.json` |
+-| `golang` | `~/go/pkg/mod`, `~/.cache/go-build` | `go.sum` |
+-| `generic` | none, nothing is resolved | |
+-
+-```yaml
+-      - name: Cache Maven packages
+-        uses: actions/cache@v6
+-        with:
+-          path: ~/.m2/repository
+-          key: ${{ runner.os }}-m2-v1-${{ hashFiles(format('{0}/**/pom.xml', env.PROJECT)) }}
+-          restore-keys: ${{ runner.os }}-m2-v1-
+-```
+-
+-Note the key uses `format()` with `PROJECT`. A bare `**/pom.xml` hashes every project in a multi project repository, so the key churns on unrelated changes.
+-
+-Dependency resolution (`mvn dependency:resolve`, `npm ci`, `go mod download`) lives in **`ci/setup-tools.sh`**, not in the workflow, so `make sca` resolves dependencies exactly the way CI does. The cache step only warms the download directory.
+-
+-One caveat: `actions/cache` skips its save step when the job fails. Because a security gate is designed to fail, a project with an unfixable CVE will never populate its cache.
+-
+-### Container Scanning
+-
+-Two passes over one image, then a merge:
+-
+-```yaml
+-      - name: Scan Dockerfile (Hadolint + OpenGrep)
+-        working-directory: ${{ env.PROJECT }}
+-        run: python3 "$GITHUB_WORKSPACE/ci/container_scan.py" --scan-type sast
+-
+-      - name: Scan image for CVEs (Trivy + OSV-Scanner)
+-        working-directory: ${{ env.PROJECT }}
+-        run: python3 "$GITHUB_WORKSPACE/ci/container_scan.py" --scan-type sca --image "$IMAGE_NAME"
+-
+-      - name: Merge SARIF reports
+-        working-directory: ${{ env.PROJECT }}
+-        run: |
+-          python3 "$GITHUB_WORKSPACE/ci/container_scan.py" \
+-            --merge-sarif "$TRIVY_SCA_SARIF_OUTPUT" "$OSV_SCA_SARIF_OUTPUT" \
+-                          "$OPENGREP_SAST_SARIF_OUTPUT" "$HADOLINT_SAST_SARIF_OUTPUT" \
+-            --merge-output "$MERGED_SARIF_OUTPUT"
+-```
+-
+-The Dockerfile pass runs **inside `PROJECT`** on purpose. `container_scan.py` scans with `--include=Dockerfile` against the current directory, so running it from the repository root would pick up every Dockerfile in the repository.
++More on the local flow, including how to change settings without rebuilding:
++[docs/local-runs.md](docs/local-runs.md).
+ 
+ ---
+ 
+-## Adopting in Your Own Repository
++## Adopt it in your repository
+ 
+-Copy two folders. No submodule, no action to install.
++Copy two folders. No submodule, no action to install, no dependency on this
++repository afterwards.
+ 
+ | Step | What to do |
+ |---|---|
+ | 1 | Copy `ci/` to your repository root. Drop `ci/docker/` unless you also want the local `make` flow. |
+ | 2 | Copy the workflows you need from `.github/workflows/`. |
+-| 3 | Set `PROJECT` and `ECOSYSTEM` in each workflow's `env:` block. |
+-| 4 | Adjust thresholds, rulesets and suppression paths, see [Environment Variables](#environment-variables). |
+-
+-What lands in your repository:
+-
+-```
+-your-repo/
+-├── ci/
+-│   ├── setup-tools.sh
+-│   ├── sast_scan.py
+-│   ├── sca_scan.py
+-│   ├── container_scan.py
+-│   ├── parse_sarif.py
+-│   ├── suppress_trivy.yaml
+-│   └── suppress_osv_scanner.toml
+-└── .github/workflows/
+-    ├── sast.yml
+-    ├── sca.yml
+-    └── container-scan.yml
+-```
++| 3 | Point them at your code by editing the `env:` block. |
+ 
+ The minimum to edit:
+ 
+@@ -284,250 +91,123 @@ The minimum to edit:
+       ECOSYSTEM: maven              # SCA only: maven | npm | golang | generic | none
+       GATE_FAIL_THRESHOLD: "8.0"
+       GATE_WARN_THRESHOLD: "5.0"
++      SARIF_CATEGORY: sca-backend   # must be unique per job
++      ARTIFACT_NAME: sca-report     # must be unique per job
+ ```
+ 
+-For a multi project repository, copy the workflow once per project and point `PROJECT` at each folder.
+-
+-**Worked example:** [datacatalog PR #1](https://github.com/moghit-eou/datacatalog/pull/1), a multi project repository adopting these pipelines, one workflow per folder.
+-
+----
+-
+-## The Gate
++For a repository with several projects in it, copy the job once per project and point
++`PROJECT` at each folder.
+ 
+-SCA and Container Scanning read the `security-severity` property (CVSS score) from every SARIF result and take the maximum:
+-
+-| Max CVSS | Status | Exit code |
+-|---|---|---|
+-| at or above `GATE_FAIL_THRESHOLD` | **FAILED** | 1, blocks the pipeline |
+-| at or above `GATE_WARN_THRESHOLD`, below fail | **WARNING** | 0, logged only |
+-| below warn | **PASSED** | 0 |
+-| tool crashed or no SARIF | **ERROR** | 1, a broken scanner is never a pass |
+-
+-Defaults are `8.0` and `5.0`. Override per project in a workflow:
++Every job also needs:
+ 
+ ```yaml
+-GATE_FAIL_THRESHOLD: "7.0"
+-GATE_WARN_THRESHOLD: "4.0"
+-```
+-
+-or locally in `ci/docker/env/sca.env`, without quotes, since `--env-file` does not strip them:
+-
+-```dotenv
+-GATE_FAIL_THRESHOLD=7.0
+-GATE_WARN_THRESHOLD=4.0
+-```
+-
+-SAST gates differently. OpenGrep runs with `--severity=ERROR --error`, so any `ERROR` level rule match fails the job. There is no CVSS score to threshold on.
+-
+-Reports upload **even when the gate fails**, because the upload steps are guarded on the SARIF file existing, not on the scan's exit code. A blocked build still publishes its findings.
+-
+----
+-
+-## Reading SARIF Reports
+-
+-SARIF is JSON, so it is readable but unpleasant by hand. Four ways to look at it:
+-
+-1. **GitHub Security tab.** Uploaded automatically by the workflows, with findings mapped to lines of code.
+-2. **VS Code.** Install the [SARIF Viewer](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer) extension, then open any `.sarif` file. It gives you a sortable findings list that jumps straight to the offending line, which is the fastest way to triage a local `make` run.
+-3. **In the browser.** Drop a `.sarif` file into the [SARIF Web Viewer](https://microsoft.github.io/sarif-web-component/). Nothing to install, and it works for sharing a report with someone who does not have the repository checked out.
+-4. **The workflow artifact.** Every job uploads its SARIF as a downloadable artifact, useful when a run fails before the Security tab upload.
+-
+----
+-
+-## Configuring Semgrep Rulesets
+-
+-`SEMGREP_CONFIG_RULESETS` is a space separated list. Two kinds of entry.
+-
+-**1. Local folders** from the pinned [semgrep-rules](https://github.com/semgrep/semgrep-rules) clone. Browse that repository and add any top level directory:
+-
+-```yaml
+-SEMGREP_CONFIG_RULESETS: >-
+-  ${{ github.workspace }}/../tools/semgrep-rules/generic
+-  ${{ github.workspace }}/../tools/semgrep-rules/java
+-  ${{ github.workspace }}/../tools/semgrep-rules/python
+-  ${{ github.workspace }}/../tools/semgrep-rules/terraform
+-```
+-
+-**2. Registry packs** from [semgrep.dev/explore](https://semgrep.dev/explore), referenced as `p/<name>`:
+-
+-```yaml
+-  p/default p/owasp-top-ten p/secrets auto
++permissions:
++  contents: read
++  security-events: write   # to upload SARIF to the Security tab
+ ```
+ 
+-`auto` lets OpenGrep pick language appropriate rules automatically.
+-
+-| Entry | Behaviour |
+-|---|---|
+-| Local folder path | Uses the **pinned** ruleset commit, fully reproducible |
+-| `p/<name>` | Fetched from the registry at scan time, may drift between runs |
+-| `auto` | Language detected registry rules |
+-
+-For reproducible results, prefer local folders. `SEMGREP_RULES_REF` in `ci/setup-tools.sh` pins the exact ruleset commit, so the same input always yields the same findings.
+-
+-In the local Docker flow the equivalent setting lives in `ci/docker/env/sast.env`, pointing at `/app/semgrep-rules/...`.
++Full walkthrough of the three workflows, including dependency caching and the
++gotchas: [docs/github-actions.md](docs/github-actions.md).
+ 
+ ---
+ 
+-## Adding Your Own Ecosystem
++## Working examples
+ 
+-SCA works with any language. Adding one means teaching `ci/setup-tools.sh` how to produce a CycloneDX SBOM for it. The scanners never change, because they only ever see an SBOM.
++These pipelines run in production in the Medical Informatics Platform. Each repository
++is a different adoption shape, so pick the one closest to yours and copy from it.
+ 
+-**Step 1.** Add a `case` branch in `ci/setup-tools.sh`:
+-
+-```bash
+-  gradle)
+-    echo "Generating SBOM for Gradle project"
+-    mkdir -p target
+-    ./gradlew cyclonedxBom -q
+-    cp build/reports/bom.json target/bom.json
+-    ;;
+-```
+-
+-**Step 2.** Install the build tool in the `sca-toolbox` stage of `ci/docker/Dockerfile`, so the local flow has it:
+-
+-```dockerfile
+-RUN apt-get update && apt-get install -y --no-install-recommends \
+-      maven gradle \
+-    && rm -rf /var/lib/apt/lists/*
+-```
+-
+-**Step 3** (CI only, optional). Add an `actions/cache` block for the ecosystem's dependency directory.
+-
+-Then use it:
+-
+-```bash
+-make sca PROJECT=./my-gradle-service ECOSYSTEM=gradle
+-```
+-
+-```yaml
+-ECOSYSTEM: gradle
+-```
+-
+-### Prefer a native CycloneDX generator over `generic`
+-
+-`ECOSYSTEM: generic` falls back to a Trivy filesystem scan, which needs no toolchain and is meant to work on any language. In practice it depends on Trivy recognising whatever lockfile your project uses, so coverage varies and it can quietly miss dependencies. It is a convenient starting point, but it is **not** the recommended long term choice:
+-
+-| | Native CycloneDX plugin | `generic` (Trivy filesystem) |
++| Repository | Shape | What to look at |
+ |---|---|---|
+-| Dependency resolution | Yes, before the SBOM is built | No |
+-| Transitive dependencies | Complete | Only what appears in lockfiles |
+-| Version accuracy | Resolved versions | Declared ranges in some cases |
+-| Rate limiting | Avoided, dependencies are already cached | Can hit registry rate limits on cold runs |
++| [platform-backend](https://github.com/Medical-Informatics-Platform/platform-backend/tree/master/.github/workflows) | Single Maven/Spring Boot project | The simplest case: one project, one job per pipeline |
++| [platform-ui](https://github.com/Medical-Informatics-Platform/platform-ui/tree/master/.github/workflows) | Single npm/Angular project | The same shape for a JavaScript toolchain |
++| [datacatalog PR #18](https://github.com/Medical-Informatics-Platform/datacatalog/pull/18) | Three projects in one repository | A build matrix covering a Maven backend, an npm frontend and a Python project on `generic`, with per-project rulesets and SARIF categories |
+ 
+-Without a resolve step, dependencies may be fetched during the scan itself, which is where public registry rate limits (Maven Central in particular) start failing your builds intermittently. The built in ecosystems all run their resolve step first (`mvn dependency:resolve`, `npm ci`, `go mod download`) inside `setup-tools.sh`, so the SBOM is generated from an already populated local cache.
++The `datacatalog` case is the useful one if your repository holds more than one
++project: it shows how far the `env:` block alone gets you, without touching any
++pipeline code.
+ 
+-Use `generic` to get coverage quickly, then move to a proper ecosystem branch once the project matters.
++Those repositories vendor `ci/` in a deliberately simplified form, with values written
++directly into the scripts rather than read from the environment. That is a choice made
++for their maintainers, who wanted a folder they could read without learning a
++configuration layer first. This repository keeps the configurable version, which is
++what you want when adopting into an unknown project.
+ 
+ ---
+ 
+-## Suppressing a False Positive
+-
+-Trivy and OSV-Scanner read ignore files whose paths come from the environment, so you can point them at your own files without touching pipeline code.
+-
+-**Trivy**, in `ci/suppress_trivy.yaml`:
+-
+-```yaml
+-vulnerabilities:
+-  - id: CVE-2025-12345
+-    statement: "Vulnerable code path is unreachable in our configuration."
+-    expires: 2026-12-31
+-```
+-
+-**OSV-Scanner**, in `ci/suppress_osv_scanner.toml`:
+-
+-```toml
+-[[IgnoredVulns]]
+-id = "GHSA-xxxx-yyyy-zzzz"
+-ignoreUntil = 2026-12-31
+-reason = "No fix available, mitigated at the network layer."
+-```
++## The gate
+ 
+-To use files from your own repository instead, repoint the variables:
++SCA and Container Scanning read the `security-severity` property (the CVSS score) from
++every SARIF result and take the maximum:
+ 
+-```yaml
+-TRIVY_IGNOREFILE: ${{ github.workspace }}/security/trivy.yaml
+-OSV_IGNOREFILE: ${{ github.workspace }}/security/osv-scanner.toml
+-```
+-
+-Always set an expiry and a reason. A suppression without a review date is a permanent blind spot.
+-
+-**SAST has no ignore file.** OpenGrep findings are suppressed either at the rule level, or by excluding paths:
++| Max CVSS | Status | Exit code |
++|---|---|---|
++| at or above `GATE_FAIL_THRESHOLD` | **FAILED** | 1, blocks the pipeline |
++| at or above `GATE_WARN_THRESHOLD`, below fail | **WARNING** | 0, logged only |
++| below warn | **PASSED** | 0 |
++| tool crashed or wrote no SARIF | **ERROR** | 1, a broken scanner is never a pass |
+ 
+-```yaml
+-OPENGREP_EXCLUDE: "*.sarif vendor/ testdata/ *.generated.go"
+-```
++Defaults are `8.0` and `5.0`.
+ 
+-Patterns are relative to `PROJECT`, not the repository root.
++SAST gates differently. OpenGrep runs with `--severity=ERROR --error`, so any `ERROR`
++level rule match fails the job. A pattern match has no CVE behind it and therefore no
++CVSS score to threshold on, which is why the two models are kept apart rather than
++merged. See [docs/why-these-tools.md](docs/why-these-tools.md#design-call-2-two-gate-models).
+ 
+-- Trivy: [Filtering and ignore files](https://trivy.dev/docs/latest/configuration/filtering/#trivyignoreyaml)
+-- OSV-Scanner: [Ignore vulnerabilities by ID](https://google.github.io/osv-scanner/configuration/#ignore-vulnerabilities-by-id)
++Reports upload **even when the gate fails**, because the upload steps are guarded on
++the SARIF file existing, not on the scan's exit code. A blocked build still publishes
++its findings.
+ 
+ ---
+ 
+-## Environment Variables
+-
+-Set these in a workflow `env:` block for CI, or in `ci/docker/env/*.env` for local runs.
+-
+-**Shared**
+-
+-| Variable | Default | Purpose |
+-|---|---|---|
+-| `GATE_FAIL_THRESHOLD` | `8.0` | CVSS at or above this fails the pipeline |
+-| `GATE_WARN_THRESHOLD` | `5.0` | CVSS at or above this warns |
+-
+-**SAST**
++## Reading the reports
+ 
+-| Variable | Default | Purpose |
+-|---|---|---|
+-| `SEMGREP_CONFIG_RULESETS` | built in list | Space separated rulesets |
+-| `OPENGREP_EXCLUDE` | `*.sarif ci/ Dockerfile* ...` | Paths to skip, relative to `PROJECT` |
+-| `OPENGREP_SARIF_OUTPUT` | `sast-opengrep.sarif` | Report filename |
++SARIF is JSON, readable but unpleasant by hand. Four ways to look at it:
+ 
+-**SCA**
++1. **GitHub Security tab**, uploaded automatically by the workflows, with findings
++   mapped to lines of code.
++2. **VS Code**, with the
++   [SARIF Viewer](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer)
++   extension. The fastest way to triage a local `make` run.
++3. **[SARIF Web Viewer](https://microsoft.github.io/sarif-web-component/)**, nothing to
++   install, good for sharing a report with someone who has no checkout.
++4. **The workflow artifact**, useful when a run fails before the Security tab upload.
+ 
+-| Variable | Default | Purpose |
+-|---|---|---|
+-| `SBOM_ECOSYSTEM` | `none` | `maven`, `npm`, `golang`, `generic`, or `none` |
+-| `SBOM_PATH` | `target/bom.json` | SBOM location, relative to `PROJECT` |
+-| `TRIVY_IGNOREFILE` | `ci/suppress_trivy.yaml` | Trivy suppressions |
+-| `OSV_IGNOREFILE` | `ci/suppress_osv_scanner.toml` | OSV-Scanner suppressions |
+-| `TRIVY_SARIF_OUTPUT` | `sca-trivy.sarif` | Trivy report |
+-| `OSV_SARIF_OUTPUT` | `sca-osv-scanner.sarif` | OSV-Scanner report |
+-| `SCA_MERGED_SARIF_OUTPUT` | `sca-merged.sarif` | Combined report |
+-
+-**Container Scanning**
++---
+ 
+-| Variable | Default | Purpose |
+-|---|---|---|
+-| `DOCKERFILE_PATH` | `Dockerfile` | Dockerfile name, relative to `PROJECT` |
+-| `TRIVY_SCA_SARIF_OUTPUT` | | Image CVE report from Trivy |
+-| `OSV_SCA_SARIF_OUTPUT` | | Image CVE report from OSV-Scanner |
+-| `OPENGREP_SAST_SARIF_OUTPUT` | | Dockerfile findings from OpenGrep |
+-| `HADOLINT_SAST_SARIF_OUTPUT` | | Dockerfile findings from Hadolint |
++## Documentation
+ 
+-**Tool versions** are pinned in `ci/setup-tools.sh` and overridable by environment variable. Every binary is verified against a pinned SHA256, so overriding a `*_VERSION` requires overriding the matching `*_SHA256` too. [Renovate](https://docs.renovatebot.com/) markers keep both in sync automatically.
++| Page | What it covers |
++|---|---|
++| [docs/github-actions.md](docs/github-actions.md) | Running in CI: the three workflows step by step, permissions, dependency caching |
++| [docs/local-runs.md](docs/local-runs.md) | Running locally: the Makefile, the toolbox images, the env files |
++| [docs/configuration.md](docs/configuration.md) | Every environment variable, gate thresholds, Semgrep ruleset selection |
++| [docs/new-ecosystem.md](docs/new-ecosystem.md) | Adding a language the SBOM step does not know yet |
++| [docs/suppressions.md](docs/suppressions.md) | Suppressing a false positive or an accepted risk |
++| [docs/why-these-tools.md](docs/why-these-tools.md) | Tool choices, rejected alternatives, the two gate models |
++| [docs/troubleshooting.md](docs/troubleshooting.md) | Empty scan targets, split verdicts between tools |
+ 
+ ---
+ 
+-## Related Resources
++## Related resources
+ 
+-- **Live implementations**, these pipelines in production:
+-  [platform-backend](https://github.com/Medical-Informatics-Platform/platform-backend/tree/master/.github/workflows) (Maven),
+-  [platform-ui](https://github.com/Medical-Informatics-Platform/platform-ui/tree/master/.github/workflows) (npm)
+-- **EBRAINS DevSecOps Handbook**, extended guidance and case studies:
+-  [moghit-eou/EBRAINS-DevSecOps-handbook](https://github.com/moghit-eou/EBRAINS-DevSecOps-handbook)
+-- **Guideline**: [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/)
+-- **Scanners**: [Trivy](https://trivy.dev/), [OSV-Scanner](https://google.github.io/osv-scanner/), [OpenGrep](https://github.com/opengrep/opengrep), [Hadolint](https://github.com/hadolint/hadolint)
+-- **Rulesets**: [semgrep-rules](https://github.com/semgrep/semgrep-rules), [Semgrep Registry](https://semgrep.dev/explore)
++- **Scanners**: [Trivy](https://trivy.dev/), [OSV-Scanner](https://google.github.io/osv-scanner/),
++  [OpenGrep](https://github.com/opengrep/opengrep), [Hadolint](https://github.com/hadolint/hadolint)
++- **Rulesets**: [semgrep-rules](https://github.com/semgrep/semgrep-rules),
++  [Semgrep Registry](https://semgrep.dev/explore)
+ - **Standards**: [SARIF](https://sarifweb.azurewebsites.net/), [CycloneDX](https://cyclonedx.org/)
++- **Guideline**: [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/)
++- **EBRAINS DevSecOps Handbook**:
++  [moghit-eou/EBRAIN-DevSecOps-handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook),
++  a companion write-up of this deployment inside the EBRAINS community. Useful if you
++  want the longer narrative of one production rollout. Not required to use this
++  repository.
+ 
+ ---
+ 
+- ## License
++## License
++
++Licensed under the [MIT License](LICENSE).
+ 
+--Free to use. No restrictions.
+-+Licensed under the [MIT License](LICENSE).
+-+
+-+You may use, modify and redistribute this project, including commercially.
+-+The only condition is that the copyright and license notice stays with copies
+-+or substantial portions of the code.
++You may use, modify and redistribute this project, including commercially. The only
++condition is that the copyright and license notice stays with copies or substantial
++portions of the code.
+diff --git a/docs/configuration.md b/docs/configuration.md
+new file mode 100644
+index 0000000..9f14070
+--- /dev/null
++++ b/docs/configuration.md
+@@ -0,0 +1,135 @@
++# Configuration
++
++Set these in a workflow `env:` block for CI, or in `ci/docker/env/*.env` for local
++runs. Everything has a working default, so you only override what you need.
++
++In `.env` files, write values **without quotes**. `--env-file` does not strip them.
++
++---
++
++## The gate
++
++| Variable | Default | Purpose |
++|---|---|---|
++| `GATE_FAIL_THRESHOLD` | `8.0` | CVSS at or above this fails the pipeline |
++| `GATE_WARN_THRESHOLD` | `5.0` | CVSS at or above this warns but passes |
++
++```yaml
++GATE_FAIL_THRESHOLD: "7.0"
++GATE_WARN_THRESHOLD: "4.0"
++```
++
++These apply to SCA and Container Scanning, the two pipelines whose findings carry CVSS
++scores. SAST has no threshold: OpenGrep runs with `--severity=ERROR --error` and any
++`ERROR` level match fails the job.
++
++Raising `GATE_FAIL_THRESHOLD` is the usual first move when adopting the pipelines into
++an existing project with a backlog of findings. Start permissive, then tighten.
++
++---
++
++## What to scan
++
++| Variable | Default | Purpose |
++|---|---|---|
++| `PROJECT` | | Folder to scan, relative to the repository root |
++| `ECOSYSTEM` | `none` | SCA only: `maven`, `npm`, `golang`, `generic`, `none` |
++| `SARIF_CATEGORY` | | Security tab category, must be unique per job |
++| `ARTIFACT_NAME` | | Workflow artifact name, must be unique per job |
++
++---
++
++## SAST
++
++| Variable | Default | Purpose |
++|---|---|---|
++| `SEMGREP_CONFIG_RULESETS` | built in list | Space separated rulesets |
++| `OPENGREP_EXCLUDE` | `*.sarif ci/ Dockerfile* ...` | Paths to skip, relative to `PROJECT` |
++| `OPENGREP_SARIF_OUTPUT` | `sast-opengrep.sarif` | Report filename |
++
++---
++
++## SCA
++
++| Variable | Default | Purpose |
++|---|---|---|
++| `SBOM_ECOSYSTEM` | `none` | Which SBOM generator to use |
++| `SBOM_PATH` | `target/bom.json` | SBOM location, relative to `PROJECT` |
++| `TRIVY_IGNOREFILE` | `suppress_trivy.yaml` | Trivy suppressions |
++| `OSV_IGNOREFILE` | `suppress_osv_scanner.toml` | OSV-Scanner suppressions |
++| `TRIVY_SARIF_OUTPUT` | `sca-trivy.sarif` | Trivy report |
++| `OSV_SARIF_OUTPUT` | `sca-osv-scanner.sarif` | OSV-Scanner report |
++| `SCA_MERGED_SARIF_OUTPUT` | `sca-merged.sarif` | Combined report |
++
++---
++
++## Container Scanning
++
++| Variable | Default | Purpose |
++|---|---|---|
++| `IMAGE_NAME` | | Image to scan, must already be built |
++| `DOCKERFILE_PATH` | `Dockerfile` | Dockerfile name, relative to `PROJECT` |
++| `TRIVY_SCA_SARIF_OUTPUT` | `container-sca-trivy.sarif` | Image CVEs from Trivy |
++| `OSV_SCA_SARIF_OUTPUT` | `container-sca-osv-scanner.sarif` | Image CVEs from OSV-Scanner |
++| `OPENGREP_SAST_SARIF_OUTPUT` | `container-sast-opengrep.sarif` | Dockerfile findings from OpenGrep |
++| `HADOLINT_SAST_SARIF_OUTPUT` | `container-sast-hadolint.sarif` | Dockerfile findings from Hadolint |
++| `MERGED_SARIF_OUTPUT` | `container-scan-merged.sarif` | All four merged |
++
++`MERGED_SARIF_OUTPUT` is the one entry here that is not read from the environment by
++the script itself. The merge step is a CLI argument, `--merge-output`, and the
++workflow passes the variable through to it. If you call `container_scan.py` directly,
++pass the flag.
++
++---
++
++## Choosing Semgrep rulesets
++
++`SEMGREP_CONFIG_RULESETS` is a space separated list, and entries come in two kinds.
++
++**Local folders** from the pinned
++[semgrep-rules](https://github.com/semgrep/semgrep-rules) clone. Browse that repository
++and add any top level directory:
++
++```yaml
++SEMGREP_CONFIG_RULESETS: >-
++  ${{ github.workspace }}/../tools/semgrep-rules/generic
++  ${{ github.workspace }}/../tools/semgrep-rules/java
++  ${{ github.workspace }}/../tools/semgrep-rules/python
++  ${{ github.workspace }}/../tools/semgrep-rules/terraform
++```
++
++**Registry packs** from [semgrep.dev/explore](https://semgrep.dev/explore), referenced
++as `p/<name>`:
++
++```yaml
++  p/default p/owasp-top-ten p/secrets auto
++```
++
++| Entry | Behaviour |
++|---|---|
++| Local folder path | Uses the **pinned** ruleset commit, fully reproducible |
++| `p/<name>` | Fetched from the registry at scan time, may drift between runs |
++| `auto` | Language detected registry rules |
++
++For reproducible results, prefer local folders. `SEMGREP_RULES_REF` in
++`ci/setup-tools.sh` pins the exact ruleset commit, so the same input always yields the
++same findings.
++
++Stacking a few targeted packs generally beats `auto`, which pulls in everything and
++gets noisy. The trade-off is real in both directions: too general and you miss things,
++too specific and you spend your time triaging. Start with the language pack for your
++stack plus `p/default`, then adjust.
++
++In the local Docker flow the same setting lives in `ci/docker/env/sast.env`, pointing
++at `/app/semgrep-rules/...`.
++
++---
++
++## Tool versions
++
++Pinned in `ci/setup-tools.sh` and overridable by environment variable. Every binary is
++verified against a pinned SHA256, so overriding a `*_VERSION` requires overriding the
++matching `*_SHA256` too, or verification fails by design.
++
++[Renovate](https://docs.renovatebot.com/) markers above each pair keep version and
++checksum in sync automatically.
+diff --git a/docs/github-actions.md b/docs/github-actions.md
+new file mode 100644
+index 0000000..a1db232
+--- /dev/null
++++ b/docs/github-actions.md
+@@ -0,0 +1,163 @@
++# Running in GitHub Actions
++
++The workflows in `.github/workflows/` are plain steps calling the same `ci/` scripts
++the local `make` flow uses. No composite actions, no hidden indirection. Copy one into
++your repository and change the `env:` block.
++
++Every workflow follows the same shape:
++
++```mermaid
++flowchart LR
++    A["1 · Install scanners<br/>ci/setup-tools.sh"] --> B["2 · Run the scan<br/>cd into PROJECT"] --> C["3 · Upload SARIF<br/>Security tab + artifact"]
++```
++
++Every job needs:
++
++```yaml
++permissions:
++  contents: read
++  security-events: write   # to upload SARIF to the Security tab
++```
++
++`SARIF_CATEGORY` and `ARTIFACT_NAME` must be unique per job. GitHub replaces a
++previous upload that shares a category, so two jobs using the same one will overwrite
++each other's findings in the Security tab.
++
++---
++
++## SAST
++
++The rules are cloned **outside the checkout**, then referenced by absolute path:
++
++```yaml
++      - name: Install scanner and rules
++        run: |
++          mkdir -p "$GITHUB_WORKSPACE/../tools" && cd "$GITHUB_WORKSPACE/../tools"
++          bash "$GITHUB_WORKSPACE/ci/setup-tools.sh" --install-tool opengrep,semgrep-rules
++
++      - name: Run SAST scan
++        working-directory: ${{ env.PROJECT }}
++        run: python3 "$GITHUB_WORKSPACE/ci/sast_scan.py"
++```
++
++**Why outside the checkout:** the semgrep-rules repository ships thousands of
++deliberately vulnerable test fixtures. If it lands inside the folder being scanned,
++OpenGrep will scan those fixtures and flood you with findings.
++`$GITHUB_WORKSPACE/../tools` is outside the checkout and always safe. The local Docker
++flow achieves the same separation by baking rules into `/app/semgrep-rules`, outside
++the `/workspace` mount.
++
++---
++
++## SCA
++
++Two mandatory settings, what to scan and which ecosystem it is:
++
++```yaml
++    env:
++      PROJECT: .
++      ECOSYSTEM: maven          # maven | npm | golang | generic | none
++```
++
++```yaml
++      # cd into PROJECT, because setup-tools.sh writes the SBOM to the current directory
++      - name: Install scanners and generate SBOM
++        working-directory: ${{ env.PROJECT }}
++        run: |
++          bash "$GITHUB_WORKSPACE/ci/setup-tools.sh" \
++            --install-tool trivy,osv-scanner \
++            --sbom-ecosystem "$ECOSYSTEM"
++
++      - name: Run SCA scan
++        working-directory: ${{ env.PROJECT }}
++        run: python3 "$GITHUB_WORKSPACE/ci/sca_scan.py"
++```
++
++Add your build toolchain before those steps if the runner lacks it
++(`actions/setup-node` for npm, `actions/setup-go` for Go). Maven is preinstalled on
++`ubuntu-latest`, and `generic` needs nothing.
++
++### Dependency caching
++
++| Ecosystem | Cache path | Key file |
++|---|---|---|
++| `maven` | `~/.m2/repository` | `pom.xml` |
++| `npm` | `~/.npm` | `package-lock.json` |
++| `golang` | `~/go/pkg/mod`, `~/.cache/go-build` | `go.sum` |
++| `generic` | none, nothing is resolved | |
++
++```yaml
++      - name: Cache Maven packages
++        uses: actions/cache@v6
++        with:
++          path: ~/.m2/repository
++          key: ${{ runner.os }}-m2-v1-${{ hashFiles(format('{0}/**/pom.xml', env.PROJECT)) }}
++          restore-keys: ${{ runner.os }}-m2-v1-
++```
++
++Note the key uses `format()` with `PROJECT`. A bare `**/pom.xml` hashes every project
++in a repository that holds several, so the key churns on unrelated changes.
++
++Dependency resolution (`mvn dependency:resolve`, `npm ci`, `go mod download`) lives in
++`ci/setup-tools.sh`, not in the workflow, so `make sca` resolves dependencies exactly
++the way CI does. The cache step only warms the download directory.
++
++One caveat: `actions/cache` skips its save step when the job fails. Because a security
++gate is designed to fail, a project with an unfixable CVE will never populate its
++cache.
++
++---
++
++## Container Scanning
++
++Two passes over one image, then a merge:
++
++```yaml
++      - name: Scan Dockerfile (Hadolint + OpenGrep)
++        working-directory: ${{ env.PROJECT }}
++        run: python3 "$GITHUB_WORKSPACE/ci/container_scan.py" --scan-type sast
++
++      - name: Scan image for CVEs (Trivy + OSV-Scanner)
++        working-directory: ${{ env.PROJECT }}
++        run: python3 "$GITHUB_WORKSPACE/ci/container_scan.py" --scan-type sca --image "$IMAGE_NAME"
++
++      - name: Merge SARIF reports
++        working-directory: ${{ env.PROJECT }}
++        run: |
++          python3 "$GITHUB_WORKSPACE/ci/container_scan.py" \
++            --merge-sarif "$TRIVY_SCA_SARIF_OUTPUT" "$OSV_SCA_SARIF_OUTPUT" \
++                          "$OPENGREP_SAST_SARIF_OUTPUT" "$HADOLINT_SAST_SARIF_OUTPUT" \
++            --merge-output "$MERGED_SARIF_OUTPUT"
++```
++
++The Dockerfile pass runs **inside `PROJECT`** on purpose. `container_scan.py` scans
++with `--include=Dockerfile` against the current directory, so running it from the
++repository root would pick up every Dockerfile in the repository.
++
++The image must exist before the scan. Build it in an earlier step:
++
++```yaml
++      - name: Build image
++        working-directory: ${{ env.PROJECT }}
++        run: docker build -t "$IMAGE_NAME" .
++```
++
++---
++
++## Several projects in one repository
++
++Copy the job once per project and point `PROJECT` at each folder, or drive it from a
++matrix. A working example covering a Maven backend, an npm frontend and a Python
++project in a single repository is
++[datacatalog PR #18](https://github.com/Medical-Informatics-Platform/datacatalog/pull/18).
++
++Whichever you choose, give every job its own `SARIF_CATEGORY` and `ARTIFACT_NAME`.
++
++---
++
++## Keeping the scanners current
++
++Tool versions and their SHA256 checksums are pinned in `ci/setup-tools.sh` and carry
++[Renovate](https://docs.renovatebot.com/) markers, so both move together when a new
++release lands. `renovate.json` and `.github/dependabot.yml` in this repository are
++working configurations you can copy alongside `ci/`.
+diff --git a/docs/local-runs.md b/docs/local-runs.md
+new file mode 100644
+index 0000000..afd6b85
+--- /dev/null
++++ b/docs/local-runs.md
+@@ -0,0 +1,97 @@
++# Running locally
++
++The same `ci/` scripts CI runs, executed inside purpose-built Docker images so you do
++not have to install any scanner on your machine.
++
++**Requirements:** Docker, `make` and Bash.
++
++---
++
++## The commands
++
++```bash
++# SAST, scan source code
++make sast PROJECT=<dir>
++
++# SCA, resolve dependencies, build an SBOM, scan it
++make sca PROJECT=<dir> ECOSYSTEM=<maven|npm|golang|generic|none>
++
++# Container Scanning, the image must be built first
++docker build -t myapp:local ./my-service
++make container-scan IMAGE=myapp:local SCAN_TYPE=sast PROJECT=./my-service   # scan the Dockerfile
++make container-scan IMAGE=myapp:local SCAN_TYPE=sca                          # scan the image
++
++# Remove SARIF outputs and toolbox images
++make clean
++```
++
++`PROJECT` can point anywhere on your filesystem, not only inside this repository. The
++`test-*/` folders here are sample targets for trying the pipelines out.
++
++---
++
++## How it works
++
++`make` calls `toolbox.sh`, which calls `docker run` with your project **bind mounted
++at `/workspace`**, the image's `WORKDIR`.
++
++```mermaid
++flowchart LR
++    M["make sca PROJECT=./svc"] --> T[toolbox.sh]
++    T --> B["docker build --target sca-toolbox"]
++    B --> R["docker run<br/>-v ./svc:/workspace<br/>--env-file ci/docker/env/sca.env"]
++    R --> S["setup-tools.sh --sbom-ecosystem<br/>then sca_scan.py"]
++    S --> O["SARIF written into ./svc/"]
++```
++
++SARIF reports land **inside `PROJECT`**, next to the code they describe.
++
++The scanners and the Trivy database are installed **once**, in a shared
++`toolbox-installer` stage. All three toolbox images copy from it, so switching between
++`make sast` and `make sca` costs nothing after the first build.
++
++---
++
++## Changing settings without rebuilding
++
++Runtime configuration lives in `ci/docker/env/`, one file per pipeline:
++
++```
++ci/docker/env/
++├── sast.env
++├── sca.env
++└── container-scan.env
++```
++
++Edit those to change thresholds, output filenames, rulesets or suppression paths. They
++are passed with `--env-file` at run time, so no image rebuild is needed.
++
++Two things to watch:
++
++- **No quotes.** `--env-file` does not strip them, so `GATE_FAIL_THRESHOLD=7.0` works
++  and `GATE_FAIL_THRESHOLD="7.0"` does not.
++- **Ruleset paths differ from CI.** In the container the rules live at
++  `/app/semgrep-rules/...`, baked in outside the `/workspace` mount. In CI they sit in
++  `$GITHUB_WORKSPACE/../tools/semgrep-rules/...`. Same rules, different path.
++
++Every available variable is listed in [configuration.md](configuration.md).
++
++---
++
++## Container Scanning needs the Docker socket
++
++`toolbox.sh` mounts `/var/run/docker.sock` into the toolbox so the scanners can inspect
++images on your host daemon. The image you name in `IMAGE=` must already be built and
++visible to `docker images`.
++
++`SCAN_TYPE=sast` also needs `PROJECT`, because the Dockerfile pass scans the current
++directory. `SCAN_TYPE=sca` does not, because it reads the built image rather than the
++source tree.
++
++---
++
++## Platform support
++
++Developed and tested on Linux. macOS should work through Docker Desktop. On Windows,
++use WSL2 rather than native PowerShell, since `toolbox.sh` and `setup-tools.sh` are
++Bash scripts and the socket mount path is Linux specific.
+diff --git a/docs/new-ecosystem.md b/docs/new-ecosystem.md
+new file mode 100644
+index 0000000..5533f7f
+--- /dev/null
++++ b/docs/new-ecosystem.md
+@@ -0,0 +1,76 @@
++# Adding a new ecosystem
++
++SCA works with any language. Adding one means teaching `ci/setup-tools.sh` how to
++produce a CycloneDX SBOM for it. The scanners never change, because they only ever see
++an SBOM.
++
++Built in today: `maven`, `npm`, `golang`, `generic`, `none`.
++
++---
++
++## Step 1: add a case branch
++
++In `ci/setup-tools.sh`:
++
++```bash
++  gradle)
++    echo "Generating SBOM for Gradle project"
++    mkdir -p target
++    ./gradlew cyclonedxBom -q
++    cp build/reports/bom.json target/bom.json
++    ;;
++```
++
++Two things every branch should do: resolve dependencies first, then write the SBOM to
++`target/bom.json` (or wherever `SBOM_PATH` points).
++
++## Step 2: install the build tool in the toolbox
++
++In the `sca-toolbox` stage of `ci/docker/Dockerfile`, so the local flow has it:
++
++```dockerfile
++RUN apt-get update && apt-get install -y --no-install-recommends \
++      maven gradle \
++    && rm -rf /var/lib/apt/lists/*
++```
++
++Skip this if you only run in CI, where you add the toolchain with a setup action
++instead.
++
++## Step 3 (CI, optional): cache the dependency directory
++
++Add an `actions/cache` block for whatever directory the ecosystem downloads into. See
++[github-actions.md](github-actions.md#dependency-caching).
++
++## Then use it
++
++```bash
++make sca PROJECT=./my-gradle-service ECOSYSTEM=gradle
++```
++
++```yaml
++ECOSYSTEM: gradle
++```
++
++---
++
++## Prefer a native CycloneDX generator over `generic`
++
++`ECOSYSTEM: generic` falls back to a Trivy filesystem scan. It needs no toolchain and
++is meant to work on any language, which makes it a good way to get coverage on day
++one. It is not the right long term choice.
++
++| | Native CycloneDX plugin | `generic` (Trivy filesystem) |
++|---|---|---|
++| Dependency resolution | Yes, before the SBOM is built | No |
++| Transitive dependencies | Complete | Only what appears in lockfiles |
++| Version accuracy | Resolved versions | Declared ranges in some cases |
++| Rate limiting | Avoided, dependencies already cached | Can hit registry rate limits on cold runs |
++
++Without a resolve step, dependencies may be fetched during the scan itself, which is
++where public registry rate limits (Maven Central in particular) start failing builds
++intermittently. The built in ecosystems all resolve first, inside `setup-tools.sh`, so
++the SBOM is generated from an already populated local cache.
++
++Use `generic` to get coverage quickly, then move to a proper ecosystem branch once the
++project matters.
+diff --git a/docs/suppressions.md b/docs/suppressions.md
+new file mode 100644
+index 0000000..fed3176
+--- /dev/null
++++ b/docs/suppressions.md
+@@ -0,0 +1,70 @@
++# Suppressing a finding
++
++Use this for a false positive, or for a real finding you have assessed and accepted.
++Not for making a build green.
++
++Trivy and OSV-Scanner read ignore files whose paths come from the environment, so you
++can point them at your own files without touching pipeline code. Suppression is shared
++between the SCA and Container Scanning pipelines, since both read the same two files.
++
++---
++
++## Trivy
++
++In `ci/suppress_trivy.yaml`:
++
++```yaml
++vulnerabilities:
++  - id: CVE-2025-12345
++    statement: "Vulnerable code path is unreachable in our configuration."
++    expires: 2026-12-31
++```
++
++## OSV-Scanner
++
++In `ci/suppress_osv_scanner.toml`:
++
++```toml
++[[IgnoredVulns]]
++id = "GHSA-xxxx-yyyy-zzzz"
++ignoreUntil = 2026-12-31
++reason = "No fix available, mitigated at the network layer."
++```
++
++## Using your own files
++
++```yaml
++TRIVY_IGNOREFILE: ${{ github.workspace }}/security/trivy.yaml
++OSV_IGNOREFILE: ${{ github.workspace }}/security/osv-scanner.toml
++```
++
++---
++
++## Always set an expiry and a reason
++
++A suppression without a review date is a permanent blind spot. Both tools support an
++expiry field, and both formats have somewhere to write down why. Use them. A year from
++now the reason is the only thing that tells you whether the suppression is still
++justified, and the expiry is the only thing that forces anyone to look.
++
++---
++
++## SAST has no ignore file
++
++OpenGrep findings are suppressed either at the rule level, or by excluding paths:
++
++```yaml
++OPENGREP_EXCLUDE: "*.sarif vendor/ testdata/ *.generated.go"
++```
++
++Patterns are relative to `PROJECT`, not the repository root.
++
++Excluding a path hides every current and future finding in it, which is the right call
++for vendored code and generated files and the wrong call for code you own.
++
++---
++
++## Reference
++
++- Trivy: [Filtering and ignore files](https://trivy.dev/docs/latest/configuration/filtering/#trivyignoreyaml)
++- OSV-Scanner: [Ignore vulnerabilities by ID](https://google.github.io/osv-scanner/configuration/#ignore-vulnerabilities-by-id)
+diff --git a/docs/troubleshooting.md b/docs/troubleshooting.md
+index 53dd9c4..cb092e9 100644
+--- a/docs/troubleshooting.md
++++ b/docs/troubleshooting.md
+@@ -1,3 +1,5 @@
++# Troubleshooting
++
+ ## When the target has nothing to scan
+ 
+ A run can end like this even though the toolbox is working:
+diff --git a/docs/why-these-tools.md b/docs/why-these-tools.md
+new file mode 100644
+index 0000000..4d913c2
+--- /dev/null
++++ b/docs/why-these-tools.md
+@@ -0,0 +1,126 @@
++# Why these tools
++
++Every tool here was tested against real projects before being wired into CI. This page
++is the short version of those decisions: what was chosen, what was rejected, and the
++two design calls that shape everything else.
++
++---
++
++## What runs, and why
++
++| Tool | Role | Why |
++|---|---|---|
++| **Trivy** | SCA, Container Scanning | Scans both SBOMs and container images. Exposes a direct severity flag, and reads lockfiles as a secondary check. |
++| **OSV-Scanner** | SCA, Container Scanning | Backed by Google's OSV database, with fast CVE updates. Catches findings Trivy sometimes reports as severity "unknown". |
++| **OpenGrep** | SAST, Dockerfile linting | Same CLI and rule format as Semgrep, without the paid-tier feature gate. |
++| **Hadolint** | Container Scanning | Dockerfile-specific linter, run alongside OpenGrep's Dockerfile rules. |
++
++All four are open source, all four emit SARIF, and none of them require an account or
++a hosted service.
++
++### OpenGrep rather than Semgrep
++
++Semgrep moved several features behind a paid platform tier. OpenGrep is the community
++fork with those features open, and it keeps the same CLI and the same rule format, so
++it is not a different tool to learn. Rules are YAML patterns matched against a parsed
++AST rather than against text, which is why they can find an insecure call structurally
++instead of by grepping for a function name.
++
++### Two SCA tools rather than one
++
++Not redundancy. In testing the two disagreed in ways that mattered: one would report a
++finding with no severity score at all while the other supplied a real one, and CVEs
++new enough that database coverage differed showed up in one before the other. Each
++tool syncs its own upstream database on its own schedule. Running both closes gaps
++neither closes alone.
++
++### Rejected
++
++Tools that were tested and not adopted generally failed on one of three things: they
++needed a hosted account or an API key to be useful, they emitted no SARIF so their
++findings could not join the shared gate, or they duplicated coverage already provided
++without adding anything.
++
++---
++
++## Design call 1: scan an SBOM, not the dependency cache
++
++This is the most consequential decision in the SCA pipeline.
++
++Early testing scanned a Maven project's local repository (`~/.m2`, populated by
++`mvn dependency:resolve`) directly. The result was over 300 CVE findings, most of them
++false positives, with no realistic way to triage them.
++
++The reason is that `~/.m2/repository` is a **cache**, not a dependency list. It holds
++everything Maven has ever downloaded on that machine, including transitive artifacts
++that were resolved and then discarded, artifacts belonging to other projects, and
++multiple versions of the same library. Scanning it answers "what has this machine
++downloaded", not "what does this project ship".
++
++Generating a [CycloneDX](https://cyclonedx.org/) SBOM first answers the right
++question, and has a second benefit: the scanners stop caring about your package
++manager. Adding a language becomes a matter of teaching the SBOM step to produce a
++bill of materials, not modifying any scanner. That is what makes
++[adding an ecosystem](new-ecosystem.md) cheap.
++
++---
++
++## Design call 2: two gate models
++
++Trivy and OSV-Scanner report **known vulnerabilities**: a CVE, with a database entry
++and a CVSS score. OpenGrep and Hadolint report **rule matches**: a pattern fired, or
++it did not. There is no CVE and therefore no score.
++
++Forcing both through one CVSS threshold would mean inventing a severity number for
++findings that never had one, which misrepresents what was found. So there are two
++models, kept apart on purpose:
++
++| | CVSS gate | Rule severity gate |
++|---|---|---|
++| Used by | Trivy, OSV-Scanner | OpenGrep, Hadolint |
++| Measures | Known vulnerability severity | Pattern match severity |
++| Fails when | Max CVSS at or above `GATE_FAIL_THRESHOLD` | Any `ERROR` level rule matches |
++| Tunable | Yes, per project | By ruleset selection |
++
++### Why a custom SARIF parser
++
++Trivy and OSV-Scanner both produce SARIF and both populate the `security-severity`
++property, but they do not share a CLI flag for turning a score into a build decision.
++Trivy accepts `--severity CRITICAL` directly; OSV-Scanner has no equivalent. Relying
++on each tool's native behaviour would mean two tools failing builds by two different
++rules.
++
++Instead both outputs go through one shared function, `parse_sarif.evaluate()`, which
++reads the score SARIF already carries and applies one threshold regardless of which
++tool produced the finding. One rule, one place to change it, consistent behaviour
++across the pipeline.
++
++---
++
++## Design call 3: three pipelines, not one
++
++Container Scanning, SCA and SAST are three separate workflows with three orchestrators
++and three gates.
++
++| Pipeline | Scans | Does not scan |
++|---|---|---|
++| SAST | Your source code | Dependencies, the image, the Dockerfile |
++| SCA | Your dependencies, via an SBOM | Source code, the image |
++| Container Scanning | The built image and the Dockerfile | Application source, application dependencies |
++
++Three genuinely different artifacts, at three points in the supply chain: what you
++wrote, what you depend on, and what you ship. One combined workflow would either run
++them in sequence, so a broken step blocks unrelated findings from surfacing, or grow
++conditional logic to keep them apart internally. The split gives independent triggers,
++parallel execution, and a failure you can read at a glance.
++
++---
++
++## Wanting more depth
++
++These pipelines were built for the Medical Informatics Platform, and the longer
++narrative of that rollout, including the case studies behind the numbers on this page,
++lives in the
++[EBRAINS DevSecOps Handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook).
++It is written for the EBRAINS community and assumes that context, but the reasoning
++carries over.
