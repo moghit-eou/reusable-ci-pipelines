@@ -73,9 +73,28 @@ Two mandatory settings, what to scan and which ecosystem it is:
         run: python3 "$GITHUB_WORKSPACE/ci/sca_scan.py"
 ```
 
-Add your build toolchain before those steps if the runner lacks it
-(`actions/setup-node` for npm, `actions/setup-go` for Go). Maven is preinstalled on
-`ubuntu-latest`, and `generic` needs nothing.
+### You probably do not need a `setup-*` action
+
+`ubuntu-latest` already ships the toolchains these pipelines resolve with. On the
+Ubuntu 24.04 runner image that currently means Node.js 22 and npm 10, Go, Temurin JDK
+17 with Maven 3.9, and Python 3.12. So for a normal npm, Maven or Go project the
+dependency resolution inside `setup-tools.sh` works with no `actions/setup-node`,
+`actions/setup-java` or `actions/setup-go` step at all. None of the three production
+adoptions linked from the README use one.
+
+Add a `setup-*` action only when you need a **specific** version, not to make the
+toolchain exist:
+
+- your project requires a version other than the runner default (an older JDK, a Node
+  version your lockfile was built against)
+- you want the version pinned so a runner image update cannot move it under you
+
+`ECOSYSTEM: generic` resolves nothing and needs no toolchain either way.
+
+The one setup action the workflows do use is `actions/setup-python`, and that is a
+pinning choice rather than an availability one. Python is preinstalled, but the
+orchestrator scripts run on a pinned version so behaviour does not drift when the
+runner image changes.
 
 ### Dependency caching
 

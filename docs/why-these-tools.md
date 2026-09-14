@@ -8,12 +8,29 @@ two design calls that shape everything else.
 
 ## What runs, and why
 
-| Tool | Role | Why |
+Two of the tools do **static analysis**, matching patterns against code. Two do
+**vulnerability scanning**, matching components against CVE databases. That split is
+the single most important thing to understand about them, because it is what produces
+the [two gate models](#design-call-2-two-gate-models) further down.
+
+| Tool | What it does | Which pipelines run it |
 |---|---|---|
-| **Trivy** | SCA, Container Scanning | Scans both SBOMs and container images. Exposes a direct severity flag, and reads lockfiles as a secondary check. |
-| **OSV-Scanner** | SCA, Container Scanning | Backed by Google's OSV database, with fast CVE updates. Catches findings Trivy sometimes reports as severity "unknown". |
-| **OpenGrep** | SAST, Dockerfile linting | Same CLI and rule format as Semgrep, without the paid-tier feature gate. |
-| **Hadolint** | Container Scanning | Dockerfile-specific linter, run alongside OpenGrep's Dockerfile rules. |
+| **OpenGrep** | Static analysis (SAST) of source code and Dockerfiles | SAST, Container Scanning |
+| **Hadolint** | Static analysis (linting) of Dockerfiles | Container Scanning |
+| **Trivy** | Vulnerability scanning of dependencies and container images | SCA, Container Scanning |
+| **OSV-Scanner** | Vulnerability scanning of dependencies and container images | SCA, Container Scanning |
+
+Note that "which pipeline runs it" is not the same as "what it does". Hadolint appears
+in Container Scanning, but it is a linter, not a container scanner: it reads the
+Dockerfile as text and never looks at the built image. Trivy and OSV-Scanner are the
+only tools here that look at image layers.
+
+| Tool | Why this one |
+|---|---|
+| **OpenGrep** | Same CLI and rule format as Semgrep, without the paid-tier feature gate. |
+| **Hadolint** | Dockerfile-specific rules that a general purpose pattern matcher does not carry, run alongside OpenGrep's Dockerfile ruleset. |
+| **Trivy** | Scans both SBOMs and container images. Exposes a direct severity flag, and reads lockfiles as a secondary check. |
+| **OSV-Scanner** | Backed by Google's OSV database, with fast CVE updates. Catches findings Trivy sometimes reports as severity "unknown". |
 
 All four are open source, all four emit SARIF, and none of them require an account or
 a hosted service.
@@ -34,12 +51,28 @@ new enough that database coverage differed showed up in one before the other. Ea
 tool syncs its own upstream database on its own schedule. Running both closes gaps
 neither closes alone.
 
-### Rejected
+### Rejected: OWASP Dependency-Check
 
-Tools that were tested and not adopted generally failed on one of three things: they
-needed a hosted account or an API key to be useful, they emitted no SARIF so their
-findings could not join the shared gate, or they duplicated coverage already provided
-without adding anything.
+Dependency-Check was the obvious candidate for SCA, and it was tested first. It was
+rejected on operational grounds rather than on coverage.
+
+It builds its vulnerability data from the NIST NVD API, and that API does not hold up
+under CI usage. Runs hit rate limits and HTTP 503s from the NVD infrastructure, and the
+update step retries rather than failing fast, so a scan that should take a minute
+either stalls or dies partway through. The problem is not specific to one project: NVD
+schema changes in June 2026 required re-pulling roughly 350,000 records through the
+same API, and an API key raises the rate limit without fixing the underlying overload.
+The documented mitigation is to stop using the API and point the tool at a cached data
+feed instead, which means either trusting a third party mirror or hosting one.
+
+Trivy and OSV-Scanner both ship their own databases and sync them independently, so
+neither has this failure mode. That is why both are here and Dependency-Check is not.
+
+It is worth saying plainly that Dependency-Check is itself an OWASP project, and the
+rejection is about how its data source behaves in CI, not about the tool's analysis.
+
+Other tools were dropped for more ordinary reasons: they needed a hosted account to be
+useful, or they emitted no SARIF, so their findings could not join the shared gate.
 
 ---
 
@@ -116,11 +149,10 @@ parallel execution, and a failure you can read at a glance.
 
 ---
 
-## Wanting more depth
+## Going deeper
 
-These pipelines were built for the Medical Informatics Platform, and the longer
-narrative of that rollout, including the case studies behind the numbers on this page,
-lives in the
+These pipelines were built for the Medical Informatics Platform. The case studies
+behind the numbers on this page, and the longer narrative of that rollout, are in the
 [EBRAINS DevSecOps Handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook).
 It is written for the EBRAINS community and assumes that context, but the reasoning
 carries over.

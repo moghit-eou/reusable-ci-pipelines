@@ -118,8 +118,8 @@ is a different adoption shape, so pick the one closest to yours and copy from it
 
 | Repository | Shape | What to look at |
 |---|---|---|
-| [platform-backend](https://github.com/Medical-Informatics-Platform/platform-backend/tree/master/.github/workflows) | Single Maven/Spring Boot project | The simplest case: one project, one job per pipeline |
-| [platform-ui](https://github.com/Medical-Informatics-Platform/platform-ui/tree/master/.github/workflows) | Single npm/Angular project | The same shape for a JavaScript toolchain |
+| [platform-backend](https://github.com/Medical-Informatics-Platform/platform-backend/tree/master/.github/workflows) | One Maven project at the repository root | The simplest case: `PROJECT: .`, `ECOSYSTEM: maven`, one job per pipeline |
+| [platform-ui](https://github.com/Medical-Informatics-Platform/platform-ui/tree/master/.github/workflows) | One npm project at the repository root | The same shape with `ECOSYSTEM: npm`. Only the ecosystem and the rulesets change |
 | [datacatalog PR #18](https://github.com/Medical-Informatics-Platform/datacatalog/pull/18) | Three projects in one repository | A build matrix covering a Maven backend, an npm frontend and a Python project on `generic`, with per-project rulesets and SARIF categories |
 
 The `datacatalog` case is the useful one if your repository holds more than one
@@ -174,6 +174,20 @@ SARIF is JSON, readable but unpleasant by hand. Four ways to look at it:
 
 ---
 
+## Want the longer story?
+
+This repository is self-contained: everything you need to run, configure and adopt the
+pipelines is here and in `docs/`.
+
+If you want the reasoning in more depth, the
+**[EBRAINS DevSecOps Handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook)**
+is a companion write-up of one production rollout: the assessment that started it, the
+case studies behind each tool decision, and what went wrong on the way. It is written
+for the EBRAINS community and assumes that context, so it is extra reading rather than
+a prerequisite.
+
+---
+
 ## Documentation
 
 | Page | What it covers |
@@ -196,11 +210,6 @@ SARIF is JSON, readable but unpleasant by hand. Four ways to look at it:
   [Semgrep Registry](https://semgrep.dev/explore)
 - **Standards**: [SARIF](https://sarifweb.azurewebsites.net/), [CycloneDX](https://cyclonedx.org/)
 - **Guideline**: [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/)
-- **EBRAINS DevSecOps Handbook**:
-  [moghit-eou/EBRAIN-DevSecOps-handbook](https://github.com/moghit-eou/EBRAIN-DevSecOps-handbook),
-  a companion write-up of this deployment inside the EBRAINS community. Useful if you
-  want the longer narrative of one production rollout. Not required to use this
-  repository.
 
 ---
 
