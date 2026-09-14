@@ -163,6 +163,92 @@ The image must exist before the scan. Build it in an earlier step:
 
 ---
 
+## Who can see your reports
+
+Each pipeline publishes its findings through two channels, and they do **not** have
+the same access rules:
+
+| Channel | Who can see it |
+|---|---|
+| Security tab (`upload-sarif`) | People with **write** access, so your team |
+| Workflow artifact (`upload-artifact`) | Anyone with **read** access, which on a public repository is every signed-in GitHub user |
+
+On a public repository that second row means your full list of unpatched CVEs is
+downloadable by anyone with a GitHub account.
+
+Whether that matters is your call. Three options:
+
+- **Drop the artifact.** Delete the `upload-artifact` step. The Security tab still
+  gets everything, and your team loses nothing but the downloadable copy.
+- **Leave it public.** Fine for a project where the findings are not sensitive.
+- **Encrypt it.** Keep the artifact, but make it useless to anyone without the
+  password.
+
+### Optional: encrypting the artifact
+
+This is optional. Add it only if you chose the third option above.
+
+Create a repository secret named `ARTIFACT_PASSWORD`, then put this between the scan
+step and the upload step:
+
+```yaml
+      - name: Encrypt SARIF report
+        id: encrypt
+        if: ${{ !cancelled() && hashFiles(env.OPENGREP_SARIF_OUTPUT) != '' }}
+        env:
+          PW: ${{ secrets.ARTIFACT_PASSWORD }}
+          OUT: ${{ env.OPENGREP_SARIF_OUTPUT }}.gpg
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::warning title=SARIF not uploaded::ARTIFACT_PASSWORD unavailable (Dependabot, Renovate or fork PR). Skipping."
+            rm -f -- "$OPENGREP_SARIF_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$PW" | gpg --symmetric --batch --yes --quiet \
+            --pinentry-mode loopback --passphrase-fd 0 \
+            --no-symkey-cache --cipher-algo AES256 \
+            --s2k-mode 3 --s2k-digest-algo SHA512 --s2k-count 65011712 \
+            --output "$OUT" -- "$OPENGREP_SARIF_OUTPUT"
+          rm -f -- "$OPENGREP_SARIF_OUTPUT"
+          echo "encrypted=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload encrypted SARIF artifact
+        if: ${{ !cancelled() && steps.encrypt.outputs.encrypted != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: sast-report
+          path: ${{ steps.encrypt.outputs.encrypted }}
+          retention-days: 30
+          if-no-files-found: error
+```
+
+Swap `OPENGREP_SARIF_OUTPUT` for the report variable of whichever pipeline you are
+editing (`SCA_MERGED_SARIF_OUTPUT` for SCA, `MERGED_SARIF_OUTPUT` for Container
+Scanning).
+
+Points worth knowing:
+
+- The plaintext SARIF is deleted in both branches, so it can never reach the artifact.
+- Runs without access to the secret (Dependabot, Renovate, fork PRs) skip the upload
+  and log a warning instead of failing.
+- The Security tab copy stays unencrypted, and that is deliberate. It is already
+  restricted to people with write access, so there is nothing to protect it from.
+
+To read a report:
+
+```bash
+gpg --decrypt sast-opengrep.sarif.gpg > sast-opengrep.sarif
+```
+
+Anyone holding the password can decrypt, so treat it like any shared credential and
+rotate it when someone leaves the project.
+
+Live example: [platform-backend](https://github.com/Medical-Informatics-Platform/platform-backend)
+and [platform-ui](https://github.com/Medical-Informatics-Platform/platform-ui) both run
+this on all three pipelines.
+
+---
+
 ## Several projects in one repository
 
 Copy the job once per project and point `PROJECT` at each folder, or drive it from a
