@@ -15,7 +15,7 @@ define USAGE
 Usage:
   make sast   PROJECT=<dir>
   make sca    PROJECT=<dir> ECOSYSTEM=<maven|npm|golang|generic|none|...>
-            more ecosystems: https://github.com/moghit-eou/DevSecOps-CI-pipelines#sca-ecosystem-configuration
+            more ecosystems: https://github.com/moghit-eou/reusable-ci-pipelines/blob/main/docs/new-ecosystem.md
   make container-scan IMAGE=<image> SCAN_TYPE=<sast|sca> [PROJECT=<dir>]  # PROJECT required when SCAN_TYPE=sast
 endef
 export USAGE
