@@ -142,6 +142,41 @@ if should_install "hadolint"; then
   echo "Hadolint installed OK"
 fi
 
+# --- Unpinned environment -----------------------------------------------
+# The scanners above are pinned. The tools below are not: their version
+# comes from the runner image (CI) or the toolbox image (local), see
+# docs/reproducibility.md. Log them so that, when a result changes between
+# two runs, the log shows whether the tooling moved or the code did.
+# Printed before SBOM generation, so the versions are there if it fails.
+print_version() {
+  local name="$1"; shift
+  command -v "$1" >/dev/null 2>&1 || return 0
+  local out line
+  out="$("$@" 2>&1)" || true
+  # The JVM prepends "Picked up JAVA_TOOL_OPTIONS: ..." when that variable
+  # is set (common behind proxies). Skip such notices, keep the first real line.
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == "Picked up "* ]] && continue
+    echo "  ${name}: ${line}"
+    return 0
+  done <<< "$out"
+}
+
+echo "[setup-tools] Unpinned environment (follows the runner or image):"
+if [[ -n "${ImageOS:-}" ]]; then
+  echo "  runner image: ${ImageOS} ${ImageVersion:-}"
+fi
+if [[ -r /etc/os-release ]]; then
+  echo "  os: $(. /etc/os-release && echo "${PRETTY_NAME:-unknown}")"
+fi
+print_version java   java -version
+print_version maven  mvn -B --version
+print_version node   node --version
+print_version npm    npm --version
+print_version go     go version
+print_version docker docker --version
+print_version python python3 --version
+
 # --- SBOM generation ----------------------------------------------------
 case "$SBOM_ECOSYSTEM" in
   maven)
