@@ -113,7 +113,8 @@ as `p/<name>`:
 
 For reproducible results, prefer local folders. `SEMGREP_RULES_REF` in
 `ci/setup-tools.sh` pins the exact ruleset commit, so the same input always yields the
-same findings.
+same findings. For what else is and is not pinned across the pipelines, see
+[reproducibility.md](reproducibility.md).
 
 Stacking a few targeted packs generally beats `auto`, which pulls in everything and
 gets noisy. The trade-off is real in both directions: too general and you miss things,

@@ -195,6 +195,7 @@ a prerequisite.
 | [docs/github-actions.md](docs/github-actions.md) | Running in CI: the three workflows step by step, permissions, dependency caching |
 | [docs/local-runs.md](docs/local-runs.md) | Running locally: the Makefile, the toolbox images, the env files |
 | [docs/configuration.md](docs/configuration.md) | Every environment variable, gate thresholds, Semgrep ruleset selection |
+| [docs/reproducibility.md](docs/reproducibility.md) | What is pinned, what follows the runner, what changes by design |
 | [docs/new-ecosystem.md](docs/new-ecosystem.md) | Adding a language the SBOM step does not know yet |
 | [docs/suppressions.md](docs/suppressions.md) | Suppressing a false positive or an accepted risk |
 | [docs/why-these-tools.md](docs/why-these-tools.md) | Tool choices, rejected alternatives, the two gate models |
