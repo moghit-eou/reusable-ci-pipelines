@@ -44,7 +44,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # renovate: datasource=python-version depName=python
-          python-version: '3.14.7'
+          python-version: '3.14.8'
 
       - name: Cache Maven packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # renovate: datasource=python-version depName=python
-          python-version: '3.14.7'
+          python-version: '3.14.8'
 
       # No dependency cache: `generic` is a Trivy filesystem scan, nothing is resolved.
       - name: Install scanners and generate SBOM
@@ -181,7 +181,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # renovate: datasource=python-version depName=python
-          python-version: '3.14.7'
+          python-version: '3.14.8'
 
       - name: Cache npm packages
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -255,7 +255,7 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # renovate: datasource=python-version depName=python
-          python-version: '3.14.7'
+          python-version: '3.14.8'
 
       # No Rust toolchain and no dependency cache: `generic` is a Trivy
       # filesystem scan that reads Cargo.lock directly, nothing is built.
