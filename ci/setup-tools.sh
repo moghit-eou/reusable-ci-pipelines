@@ -23,7 +23,7 @@ OPENGREP_VERSION="${OPENGREP_VERSION:-v1.30.0}"
 OPENGREP_SHA256="${OPENGREP_SHA256:-35779bdd72e92129c8df2a77f0c55e8c08356801ea92591ef32108d6b28d564c}"
 
 # renovate: datasource=git-refs depName=https://github.com/semgrep/semgrep-rules
-SEMGREP_RULES_REF="${SEMGREP_RULES_REF:-40b8c63f75dc7c22c8a77482d73bfb864b146f7e}"
+SEMGREP_RULES_REF="${SEMGREP_RULES_REF:-a84ff9cc2453ca91d581380de4b8b3f272f6f4be}"
 SEMGREP_RULES_DIR="semgrep-rules"
 
 # renovate: datasource=github-release-attachments depName=hadolint/hadolint
