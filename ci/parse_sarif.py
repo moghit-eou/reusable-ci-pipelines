@@ -10,6 +10,13 @@ class EvaluationResult:
     gate_failed: bool
     gate_warn: bool
 
+def remove_stale_report(path):
+    """Delete a report left by an earlier run."""
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
+
 def evaluate(sarif_paths):
     if isinstance(sarif_paths, str):
         sarif_paths = [sarif_paths]

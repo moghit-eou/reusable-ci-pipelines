@@ -2,6 +2,7 @@ import subprocess
 import os
 import sys
 import logging
+from parse_sarif import remove_stale_report
 
 GREEN = '\033[92m'
 RED = '\033[91m'
@@ -28,6 +29,7 @@ OPENGREP_EXCLUDE = os.getenv(
 OPENGREP_SARIF_OUTPUT = os.getenv("OPENGREP_SARIF_OUTPUT", "sast-opengrep.sarif")
 
 def run_opengrep():
+    remove_stale_report(OPENGREP_SARIF_OUTPUT)
     logger.info(f"{BOLD}[opengrep] Starting scan...{RESET}")
     base_cmd = ["opengrep", "scan"] + \
         [f"--config {config}" for config in SEMGREP_CONFIG_RULESETS] + \

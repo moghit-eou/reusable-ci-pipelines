@@ -3,7 +3,7 @@ import os
 import sys
 import logging
 import json
-from parse_sarif import evaluate, GATE_FAIL_THRESHOLD, GATE_WARN_THRESHOLD
+from parse_sarif import evaluate, remove_stale_report, GATE_FAIL_THRESHOLD, GATE_WARN_THRESHOLD
 
 GREEN = '\033[92m'
 RED = '\033[91m'
@@ -26,6 +26,7 @@ OSV_SARIF_OUTPUT = os.getenv("OSV_SARIF_OUTPUT", "sca-osv-scanner.sarif")
 SCA_MERGED_SARIF_OUTPUT = os.getenv("SCA_MERGED_SARIF_OUTPUT", "sca-merged.sarif")
 
 def run_trivy():
+    remove_stale_report(TRIVY_SARIF_OUTPUT)
     logger.info(f"{BOLD}[trivy] Starting SBOM scan...{RESET}")
     cmd = [
         "trivy", "sbom", SBOM_PATH,
@@ -38,6 +39,7 @@ def run_trivy():
     return subprocess.run(cmd).returncode
 
 def run_osv_scanner():
+    remove_stale_report(OSV_SARIF_OUTPUT)
     logger.info(f"{BOLD}[osv-scanner] Starting SBOM scan...{RESET}")
     cmd = [
         "osv-scanner", "scan", "source",

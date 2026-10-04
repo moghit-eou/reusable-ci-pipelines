@@ -4,7 +4,7 @@ import sys
 import logging
 import json
 import argparse
-from parse_sarif import evaluate, GATE_FAIL_THRESHOLD, GATE_WARN_THRESHOLD
+from parse_sarif import evaluate, remove_stale_report, GATE_FAIL_THRESHOLD, GATE_WARN_THRESHOLD
 
 GREEN = '\033[92m'
 RED = '\033[91m'
@@ -38,6 +38,7 @@ HADOLINT_SAST_SARIF_OUTPUT = os.getenv("HADOLINT_SAST_SARIF_OUTPUT", "container-
 
 # --- Functions to run each SCA tool and handle their outputs
 def run_trivy():
+    remove_stale_report(TRIVY_SCA_SARIF_OUTPUT)
 
     logger.info(f"{BOLD}[trivy] Starting image scan...{RESET}")
 
@@ -55,6 +56,7 @@ def run_trivy():
     return subprocess.run(cmd).returncode
 
 def run_osv_scanner():
+    remove_stale_report(OSV_SCA_SARIF_OUTPUT)
     logger.info(f"{BOLD}[osv-scanner] Starting image scan...{RESET}")
     cmd = [
         "osv-scanner", "scan", "image",
@@ -145,6 +147,7 @@ def run_hadolint():
     return result.returncode
 
 def run_opengrep():
+    remove_stale_report(OPENGREP_SAST_SARIF_OUTPUT)
     logger.info(f"{BOLD}[opengrep] Starting Dockerfile scan...{RESET}")
     base_cmd = ["opengrep", "scan", "--include=Dockerfile", "-q"] + \
         [f"--config {config}" for config in SEMGREP_CONFIG_RULESETS]
@@ -177,6 +180,10 @@ def handle_sast():
             tool_status[name] = "FAILED"
         else:
             tool_status[name] = "ERROR"
+
+    if not os.path.exists(OPENGREP_SAST_SARIF_OUTPUT):
+        logger.error(f"{RED}[!] opengrep SARIF missing: {OPENGREP_SAST_SARIF_OUTPUT}, tool failed to run{RESET}")
+        tool_status["opengrep"] = "ERROR"
 
     logger.info(f"\n{BOLD}========== SAST PIPELINE SUMMARY =========={RESET}")
     for name, status in tool_status.items():
