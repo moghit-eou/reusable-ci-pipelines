@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+type: software
+title: "Reusable DevSecOps security pipelines: SAST, SCA and container scanning"
+abstract: "Three security pipelines, SAST, SCA and container scanning, that run the same way on a laptop and in GitHub Actions. They normalise the output of open source scanners to SARIF and apply one security gate. Built during Google Summer of Code 2026 with INCF and EBRAINS for the Medical Informatics Platform, following the OWASP DevSecOps Guideline."
+authors:
+  - given-names: "Abdelmoughit"
+    family-names: "El Ouaad"
+    alias: "moghit-eou"
+  - given-names: "Julien"
+    family-names: "D."
+    alias: "jdaln"
+repository-code: "https://github.com/moghit-eou/reusable-ci-pipelines"
+license: MIT
+version: "1.0.0"
+date-released: "2026-10-09"
+keywords:
+  - devsecops
+  - security
+  - sast
+  - sca
+  - sbom
+  - sarif
+  - owasp
+  - ebrains
