@@ -1,10 +1,10 @@
 .PHONY: sast sca container-scan clean
 
 # Directory or image to scan, override on the CLI, e.g.:
-#   make sast PROJECT=./mip-backend-maven
-#   make sca PROJECT=./mip-backend-maven ECOSYSTEM=maven  (maven, npm, generic, golang)
-#   make container-scan IMAGE=platform-backend:local SCAN_TYPE=sca
-#   make container-scan IMAGE=platform-backend:local SCAN_TYPE=sast PROJECT=./mip-backend-maven
+#   make sast PROJECT=./test-maven
+#   make sca PROJECT=./test-maven ECOSYSTEM=maven  (maven, npm, generic, golang)
+#   make container-scan IMAGE=test-maven:scan SCAN_TYPE=sca
+#   make container-scan IMAGE=test-maven:scan SCAN_TYPE=sast PROJECT=./test-maven
 
 PROJECT   ?=
 ECOSYSTEM ?=
