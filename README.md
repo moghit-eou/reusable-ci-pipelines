@@ -10,8 +10,8 @@ the runner through the same `ci/` scripts. Nothing differs between the two excep
 where the scripts execute, so a finding you reproduce locally is the finding CI
 reports.
 
-Built during **Google Summer of Code 2026** with [EBRAINS](https://www.ebrains.eu/),
-following the
+Built during **Google Summer of Code 2026** with [INCF](https://www.incf.org/) and
+[EBRAINS](https://www.ebrains.eu/), following the
 [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/), and
 running in production across the
 [Medical Informatics Platform](https://github.com/Medical-Informatics-Platform).
@@ -218,8 +218,10 @@ a prerequisite.
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+The code is licensed under the [MIT License](LICENSE). The documentation (this README
+and `docs/`) is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
+and code snippets in it may also be used under MIT.
 
-You may use, modify and redistribute this project, including commercially. The only
+You may use, modify and redistribute the code, including commercially. The only
 condition is that the copyright and license notice stays with copies or substantial
 portions of the code.
