@@ -10,8 +10,8 @@ the runner through the same `ci/` scripts. Nothing differs between the two excep
 where the scripts execute, so a finding you reproduce locally is the finding CI
 reports.
 
-Built during **Google Summer of Code 2026** with [EBRAINS](https://www.ebrains.eu/),
-following the
+Built during **Google Summer of Code 2026** with [INCF](https://www.incf.org/) and
+[EBRAINS](https://www.ebrains.eu/), following the
 [OWASP DevSecOps Guideline](https://owasp.org/www-project-devsecops-guideline/), and
 running in production across the
 [Medical Informatics Platform](https://github.com/Medical-Informatics-Platform).
