@@ -218,8 +218,10 @@ a prerequisite.
 
 ## License
 
-Licensed under the [MIT License](LICENSE).
+The code is licensed under the [MIT License](LICENSE). The documentation (this README
+and `docs/`) is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/),
+and code snippets in it may also be used under MIT.
 
-You may use, modify and redistribute this project, including commercially. The only
+You may use, modify and redistribute the code, including commercially. The only
 condition is that the copyright and license notice stays with copies or substantial
 portions of the code.
