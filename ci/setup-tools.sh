@@ -203,6 +203,8 @@ case "$SBOM_ECOSYSTEM" in
   golang|go)
     echo "Generating SBOM for Go project ... this may take a while"
     mkdir -p target
+    # Resolve modules first, the mirror image of `mvn dependency:resolve` above.
+    go mod download
     # Prebuilt release binary, SHA256 pinned like the scanners above. Still needs
     # the Go toolchain at runtime: cyclonedx-gomod shells out to `go` to resolve modules.
     GOMOD_TARBALL="cyclonedx-gomod_${CYCLONEDX_GOMOD_VERSION#v}_linux_amd64.tar.gz"

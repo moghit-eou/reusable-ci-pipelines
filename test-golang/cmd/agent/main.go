@@ -1,30 +1,29 @@
+// Small Docker client, used as a scan target for the SAST and SCA pipelines.
 package main
 
 import (
+	"context"
 	"log"
-	"os"
 
-	"node-agent/internal/control"
-	"node-agent/internal/execution"
-	"node-agent/internal/network"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Println("usage: go run main.go <port> !!!") // should avoid 1-1023 ports
-		return
-	}
+	ctx := context.Background()
 
-	port := os.Args[1]
-	exec, err := execution.NewDockerExecutor("alpine")
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("failed to create executor: %v", err)
+		log.Fatalf("failed to create docker client: %v", err)
+	}
+	defer cli.Close()
+
+	containers, err := cli.ContainerList(ctx, container.ListOptions{All: true})
+	if err != nil {
+		log.Fatalf("failed to list containers: %v", err)
 	}
 
-	defer exec.Close()
-
-	handler := control.NewHandler(exec)
-	server := network.NewServer(handler)
-
-	server.Start(port)
+	for _, c := range containers {
+		log.Printf("%.12s  %-10s  %s", c.ID, c.State, c.Image)
+	}
 }
