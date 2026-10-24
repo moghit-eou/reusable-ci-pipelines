@@ -54,8 +54,8 @@ ENTRYPOINT ["python3", "/app/ci/sast_scan.py"]
 FROM toolbox-base AS sca-toolbox
 
 # Build toolchains needed by `setup-tools.sh --sbom-ecosystem <maven|golang>`.
-# cyclonedx-gomod is built at run time by `go install` (version pinned, verified
-# against the Go checksum database), so the Go toolchain must be present here.
+# cyclonedx-gomod is a prebuilt, SHA256-verified release binary, but it shells out
+# to `go` to resolve modules, so the Go toolchain must be present here.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       maven npm golang-go \
     && rm -rf /var/lib/apt/lists/*

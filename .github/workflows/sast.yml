@@ -28,7 +28,7 @@ jobs:
         p/default auto
 
       # --- paths to skip, relative to PROJECT ---
-      OPENGREP_EXCLUDE: "*.sarif go.sum internal/execution/runner_docker.go"
+      OPENGREP_EXCLUDE: "*.sarif go.sum"
 
       # --- output, relative to PROJECT ---
       OPENGREP_SARIF_OUTPUT: sast-opengrep.sarif
