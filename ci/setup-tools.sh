@@ -11,8 +11,8 @@ trap 'echo "[setup-tools] ERROR: command failed (exit $?) at line $LINENO: $BASH
 # *_SHA256 must be overridden as well or verification will fail.
 
 # renovate: datasource=github-release-attachments depName=aquasecurity/trivy
-TRIVY_VERSION="${TRIVY_VERSION:-v0.76.0}"
-TRIVY_SHA256="${TRIVY_SHA256:-e24b1c51293c1b15e4ba8d45bbc7891ba053f90278ec2698f3562c993e145fe7}"
+TRIVY_VERSION="${TRIVY_VERSION:-v0.76.1}"
+TRIVY_SHA256="${TRIVY_SHA256:-c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0}"
 
 # renovate: datasource=github-release-attachments depName=google/osv-scanner
 OSV_SCANNER_VERSION="${OSV_SCANNER_VERSION:-v2.7.0}"
