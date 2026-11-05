@@ -4,7 +4,7 @@
 # =============================================================================
 # Digest-pinned: the tag alone can be re-pointed upstream at any time. Renovate
 # bumps the digest (dockerfile manager, pinDigests) after the 7-day release age.
-FROM ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 AS toolbox-base
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852 AS toolbox-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
