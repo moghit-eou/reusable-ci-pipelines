@@ -15,8 +15,8 @@ TRIVY_VERSION="${TRIVY_VERSION:-v0.76.1}"
 TRIVY_SHA256="${TRIVY_SHA256:-c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0}"
 
 # renovate: datasource=github-release-attachments depName=google/osv-scanner
-OSV_SCANNER_VERSION="${OSV_SCANNER_VERSION:-v2.7.0}"
-OSV_SCANNER_SHA256="${OSV_SCANNER_SHA256:-160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b}"
+OSV_SCANNER_VERSION="${OSV_SCANNER_VERSION:-v2.7.1}"
+OSV_SCANNER_SHA256="${OSV_SCANNER_SHA256:-fb7dab19a8bd9bbe5c3189f09d4b7ee1820c9553a23bac202648a56efd2f6ee8}"
 
 # renovate: datasource=github-release-attachments depName=opengrep/opengrep
 OPENGREP_VERSION="${OPENGREP_VERSION:-v1.32.0}"
